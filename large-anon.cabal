@@ -3,8 +3,8 @@ name:               large-anon
 version:            0.1.0.0
 -- synopsis:
 -- description:
--- bug-reports:
--- license:
+bug-reports:        https://github.com/well-typed/large-amnon/issues
+license:            BSD-3-Clause
 author:             Edsko de Vries
 maintainer:         edsko@well-typed.com
 -- copyright:
@@ -14,14 +14,27 @@ extra-source-files: CHANGELOG.md
 library
   exposed-modules:
       Data.Record.Anonymous
+      Data.Record.Anonymous.Plugin
   other-modules:
+      Data.Record.Anonymous.Plugin.Constraints
+      Data.Record.Anonymous.Plugin.NameResolution
+      Data.Record.Anonymous.Plugin.Solver
   other-extensions:
   build-depends:
-      base >= 4.13 && < 4.14
+      -- TODO: Bounds
+      base             >= 4.13  && < 4.14
+    , containers
+    , ghc-tcplugin-api >= 0.6.1
+    , record-hasfield
+
+      -- Whatever version is bundled with ghc
+    , ghc
   hs-source-dirs:
       src
   default-language:
       Haskell2010
+  ghc-options:
+      -Wall
 
 test-suite test-large-anon
   default-language:
@@ -32,5 +45,23 @@ test-suite test-large-anon
       test
   main-is:
       TestLargeAnon.hs
+  other-modules:
+      Test.Record.Anonymous.Sanity
   build-depends:
       base
+    , large-anon
+    , tasty
+    , tasty-hunit
+
+      -- TODO: This dependency on record-hasfield here is unfortunate, and
+      -- /should/ not be necessary, because we re-export HasField. However, when
+      -- I try to use the large-anon package itself for name resolution (in
+      -- Data.Record.Anonymous.Plugin.NameResolution) ghc complains that the
+      -- HasField class cannot be found. Not entirely sure why.
+      --
+      -- Matthew: I would change findImportedModule to instead use
+      -- moduleNameProvidersMap; or you can use lookupModuleWithSuggestions
+      -- (this avoids the need to declare the dependency here)
+    , record-hasfield
+  ghc-options:
+      -Wall

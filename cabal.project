@@ -1,0 +1,4 @@
+packages: .
+
+package large-anon
+  tests: True
