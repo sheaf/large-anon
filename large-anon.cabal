@@ -1,0 +1,36 @@
+cabal-version:      2.4
+name:               large-anon
+version:            0.1.0.0
+-- synopsis:
+-- description:
+-- bug-reports:
+-- license:
+author:             Edsko de Vries
+maintainer:         edsko@well-typed.com
+-- copyright:
+-- category:
+extra-source-files: CHANGELOG.md
+
+library
+  exposed-modules:
+      Data.Record.Anonymous
+  other-modules:
+  other-extensions:
+  build-depends:
+      base >= 4.13 && < 4.14
+  hs-source-dirs:
+      src
+  default-language:
+      Haskell2010
+
+test-suite test-large-anon
+  default-language:
+      Haskell2010
+  type:
+      exitcode-stdio-1.0
+  hs-source-dirs:
+      test
+  main-is:
+      TestLargeAnon.hs
+  build-depends:
+      base
