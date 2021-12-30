@@ -139,5 +139,11 @@ unsafeRecordHasField label (MkR r) = (
         ]
 
 -- | Suitable implementation for a plugin-derived 'ConstraintsRecord' instance
-unsafeDictRecord :: forall r c. Proxy c -> Rep (Dict c) (Record r)
-unsafeDictRecord = undefined
+--
+-- Precondition: the input list of dictionaries must be correctly constructed
+-- (this is ensured by the plugin).
+unsafeDictRecord :: forall r c.
+     [Dict c Any]  -- ^ Dictionary for each field, in order
+  -> Proxy c
+  -> Rep (Dict c) (Record r)
+unsafeDictRecord ds _ = Rep.unsafeFromListAny ds

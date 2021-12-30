@@ -16,6 +16,7 @@ module Data.Record.Anonymous.Plugin.Constraints (
   , Fields(..)
   , Field(..)
   , findField
+  , allFieldsKnown
     -- * Parsing
     -- ** Infrastructure
   , ParseResult(..)
@@ -33,10 +34,10 @@ module Data.Record.Anonymous.Plugin.Constraints (
 import Control.Monad
 import Data.Bifunctor
 import Data.Foldable (asum)
+import Data.Map (Map)
 import Data.Void
 
-import GHC.TcPlugin.API
-import GHC.Utils.Outputable
+import qualified Data.Map as Map
 
 import Data.Record.Anonymous.Plugin.GhcTcPluginAPI
 import Data.Record.Anonymous.Plugin.NameResolution
@@ -100,6 +101,23 @@ findField nm = go
       | nm == nm' = Just typ
       | otherwise = go fs
     go FieldsNil = Nothing
+
+-- | Return map from field name to type, /if/ all fields are statically known
+--
+-- TODO: For our current 'Fields' definition, this will /always/ be the case,
+-- but if we extend the parser to deal with field name variables or list
+-- variables, this will no longer be the case.
+allFieldsKnown :: Fields -> Maybe (Map FastString Type)
+allFieldsKnown = go Map.empty
+  where
+    go :: Map FastString Type -> Fields -> Maybe (Map FastString Type)
+    go acc = \case
+        FieldsNil ->
+          Just acc
+        FieldsCons f fs ->
+          case f of
+            FieldKnown nm typ ->
+              go (Map.insert nm typ acc) fs
 
 {-------------------------------------------------------------------------------
   Outputable
@@ -343,9 +361,10 @@ evidenceHasField ResolvedNames{..} CHasField{..} = do
 
 evidenceConstraintsRecord ::
      ResolvedNames
+  -> [EvVar]  -- Evidence for each field of the record, in order
   -> CConstraintsRecord
   -> TcPluginM 'Solve EvTerm
-evidenceConstraintsRecord ResolvedNames{..} CConstraintsRecord{..} = do
+evidenceConstraintsRecord ResolvedNames{..} cs CConstraintsRecord{..} = do
     return $
       evDataConApp
         (classDataCon clsConstraintsRecord)
@@ -353,6 +372,14 @@ evidenceConstraintsRecord ResolvedNames{..} CConstraintsRecord{..} = do
         [ mkCoreApps (Var idUnsafeDictRecord) [
               Type constraintsRecordTypeRecord
             , Type constraintsRecordTypeConstraint
+            , mkListExpr dictType []
             ]
+        ]
+  where
+    dictType :: Type
+    dictType = mkTyConApp tyConDict [
+          liftedTypeKind
+        , constraintsRecordTypeConstraint
+        , mkTyConApp anyTyCon [liftedTypeKind]
         ]
 

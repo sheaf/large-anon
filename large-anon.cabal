@@ -61,15 +61,17 @@ test-suite test-large-anon
     , tasty
     , tasty-hunit
 
-      -- TODO: This dependency on record-hasfield here is unfortunate, and
-      -- /should/ not be necessary, because we re-export HasField. However, when
-      -- I try to use the large-anon package itself for name resolution (in
-      -- Data.Record.Anonymous.Plugin.NameResolution) ghc complains that the
-      -- HasField class cannot be found. Not entirely sure why.
+      -- TODO: These dependencies on record-hasfield and sop-core here are
+      -- unfortunate, and /should/ not be necessary, because we re-export
+      -- HasField. However, when I try to use the large-anon package itself for
+      -- name resolution (in Data.Record.Anonymous.Plugin.NameResolution) ghc
+      -- complains that the HasField class cannot be found. Not entirely sure
+      -- why.
       --
       -- Matthew: I would change findImportedModule to instead use
       -- moduleNameProvidersMap; or you can use lookupModuleWithSuggestions
       -- (this avoids the need to declare the dependency here)
     , record-hasfield
+    , sop-core
   ghc-options:
       -Wall

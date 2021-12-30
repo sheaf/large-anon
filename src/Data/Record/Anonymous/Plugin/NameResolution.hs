@@ -11,7 +11,9 @@ import Data.Record.Anonymous.Plugin.GhcTcPluginAPI
 data ResolvedNames = ResolvedNames {
       clsHasField            :: Class
     , clsConstraintsRecord   :: Class
+    , clsShow                :: Class
     , tyConRecord            :: TyCon
+    , tyConDict              :: TyCon
     , idUnsafeRecordHasField :: Id
     , idUnsafeDictRecord     :: Id
     }
@@ -23,14 +25,20 @@ nameResolution = do
       getModule "record-hasfield" "GHC.Records.Compat"
     dataRecordAnonymousInternal <-
       getModule "large-anon" "Data.Record.Anonymous.Internal"
+    dataSOPDict <-
+      getModule "sop-core" "Data.SOP.Dict"
 
     clsHasField <-
       getClass ghcRecordsCompat "HasField"
     clsConstraintsRecord <-
       getClass dataRecordAnonymousInternal "ConstraintsRecord"
+    clsShow <-
+      tcLookupClass showClassName
 
     tyConRecord <-
       getTyCon dataRecordAnonymousInternal "Record"
+    tyConDict <-
+      getTyCon dataSOPDict "Dict"
 
     idUnsafeRecordHasField <-
       getVar dataRecordAnonymousInternal "unsafeRecordHasField"

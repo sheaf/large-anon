@@ -9,6 +9,8 @@ import Data.Bifunctor
 import Data.Maybe (catMaybes)
 import Data.Traversable (forM)
 
+import qualified Data.Map as Map
+
 import Data.Record.Anonymous.Plugin.Constraints
 import Data.Record.Anonymous.Plugin.GhcTcPluginAPI
 import Data.Record.Anonymous.Plugin.NameResolution
@@ -77,12 +79,31 @@ solveConstraintsRecord ::
   -> Ct
   -> GenLocated CtLoc CConstraintsRecord
   -> TcPluginM 'Solve (Maybe (EvTerm, Ct), [Ct])
-solveConstraintsRecord rn orig (L l cr@CConstraintsRecord{..}) = do
-    ev <- evidenceConstraintsRecord rn cr
-    return (
-        Just (ev, orig)
-      , []
-      )
+solveConstraintsRecord rn@ResolvedNames{..}
+                       orig
+                       (L l cr@CConstraintsRecord{..})
+                     = do
+    -- The call to 'allFieldsKnown' establishes two things:
+    --
+    -- o Unless all fields of the record are known, we cannot construct the
+    --   appropriate dictionary.
+    -- o Moreover, that dictionary is a vector of dictionaries, one per field,
+    --   and the order is determined by the field names (see also the 'Generic'
+    --   instance for 'Record'). The 'Map' constructed by 'allFieldsKnown'
+    --   gives us this ordering.
+    case allFieldsKnown constraintsRecordFields of
+      Nothing ->
+        return (Nothing, [])
+      Just fields -> do
+        cs <- forM (Map.elems fields) $ \fieldType -> newWanted' l $
+                mkClassPred clsShow [fieldType]
+        -- Use of ctev_evar is justified here because we know that we are
+        -- requesting evidence for classes, not for (primitive) equality
+        ev <- evidenceConstraintsRecord rn (map ctev_evar cs) cr
+        return (
+            Just (ev, orig)
+          , map mkNonCanonical cs
+          )
 
 {-------------------------------------------------------------------------------
   Auxiliary
