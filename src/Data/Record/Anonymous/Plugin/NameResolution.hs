@@ -10,6 +10,7 @@ import Data.Record.Anonymous.Plugin.GhcTcPluginAPI
 
 data ResolvedNames = ResolvedNames {
       clsHasField            :: Class
+    , clsConstraintsRecord   :: Class
     , tyConRecord            :: TyCon
     , idUnsafeRecordHasField :: Id
     }
@@ -24,6 +25,8 @@ nameResolution = do
 
     clsHasField <-
       getClass ghcRecordsCompat "HasField"
+    clsConstraintsRecord <-
+      getClass dataRecordAnonymousInternal "ConstraintsRecord"
     tyConRecord <-
       getTyCon dataRecordAnonymousInternal "Record"
     idUnsafeRecordHasField <-

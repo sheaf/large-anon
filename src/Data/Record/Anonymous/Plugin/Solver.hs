@@ -13,20 +13,26 @@ import Data.Record.Anonymous.Plugin.GhcTcPluginAPI
 import Data.Record.Anonymous.Plugin.NameResolution
 
 solve :: ResolvedNames -> TcPluginSolver
-solve rn given wanted = {- trace debugOutput $ -} do
+solve rn given wanted = trace _debugOutput $ do
     (solved, new) <- fmap (unzip . catMaybes) $
       forM parsedHasField $ uncurry (solveHasField rn)
     return $ TcPluginOk solved new
   where
-    parsedHasField :: [(Ct, GenLocated CtLoc CHasField)]
-    parsedHasField = parseAll' (withOrig (parseHasField rn)) wanted
+    parsedHasField          :: [(Ct, GenLocated CtLoc CHasField)]
+    parsedConstraintsRecord :: [(Ct, GenLocated CtLoc CConstraintsRecord)]
+
+    parsedHasField =
+        parseAll' (withOrig (parseHasField rn)) wanted
+    parsedConstraintsRecord =
+        parseAll' (withOrig (parseConstraintsRecord rn)) wanted
 
     _debugOutput :: String
     _debugOutput = unlines [
           "*** solve"
-        , "given:          " ++ showSDocUnsafe (ppr given)
-        , "wanted:         " ++ showSDocUnsafe (ppr wanted)
-        , "parsedHasField: " ++ showSDocUnsafe (ppr parsedHasField)
+        , "given:                  " ++ showSDocUnsafe (ppr given)
+        , "wanted:                 " ++ showSDocUnsafe (ppr wanted)
+        , "parsedHasField:         " ++ showSDocUnsafe (ppr parsedHasField)
+        , "parsedContraintsRecord: " ++ showSDocUnsafe (ppr parsedConstraintsRecord)
         ]
 
 solveHasField ::

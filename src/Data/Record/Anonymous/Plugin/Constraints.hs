@@ -1,4 +1,6 @@
+{-# LANGUAGE DataKinds           #-}
 {-# LANGUAGE DeriveFunctor       #-}
+{-# LANGUAGE LambdaCase          #-}
 {-# LANGUAGE NamedFieldPuns      #-}
 {-# LANGUAGE RecordWildCards     #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -6,11 +8,11 @@
 
 -- TODO: Remove
 {-# OPTIONS_GHC -Wno-orphans #-}
-{-# LANGUAGE DataKinds #-}
 
 module Data.Record.Anonymous.Plugin.Constraints (
     -- * Wanted constraints recognized by the plugin
     CHasField(..)
+  , CConstraintsRecord(..)
   , Fields(..)
   , Field(..)
   , findField
@@ -22,6 +24,7 @@ module Data.Record.Anonymous.Plugin.Constraints (
   , withOrig
     -- ** Specific parsers
   , parseHasField
+  , parseConstraintsRecord
     -- * Evidence
   , evidenceHasField
   ) where
@@ -66,6 +69,14 @@ data CHasField = CHasField {
     , hasFieldTypeField :: Type
     }
 
+data CConstraintsRecord = CConstraintsRecord {
+      -- | Fields of the record
+      constraintsRecordFields :: Fields
+
+      -- | The constraint that we need for every field
+    , constraintsRecordConstraint :: Type
+    }
+
 -- TODO: Will need extension for the polymorphic case
 data Fields =
     FieldsCons Field Fields
@@ -95,6 +106,12 @@ instance Outputable CHasField where
       <+> ppr hasFieldLabel
       <+> ppr hasFieldRecord
       <+> ppr hasFieldTypeField
+
+instance Outputable CConstraintsRecord where
+  ppr CConstraintsRecord{..} = parens $
+          text "CConstraintsRecord"
+      <+> ppr constraintsRecordFields
+      <+> ppr constraintsRecordConstraint
 
 instance Outputable Fields where
   ppr (FieldsCons f fs) = parens $
@@ -167,20 +184,9 @@ parseHasField ::
      ResolvedNames
   -> Ct
   -> ParseResult Void (GenLocated CtLoc CHasField)
-parseHasField ResolvedNames{..} ct = fmap (L $ ctLoc ct) $
-    case classifyPredType (ctPred ct) of
-      ClassPred cls args | cls == clsHasField ->
-        case parseHasFieldArgs args of
-          Just parsed ->
-            ParseOk parsed
-          Nothing ->
-            panic $ "Unexpected HasField constraint with arguments:\n"
-                ++ unlines (map (showSDocUnsafe . ppr) args)
-      _otherwise ->
-        ParseNoMatch
-  where
-    parseHasFieldArgs :: [Type] -> Maybe CHasField
-    parseHasFieldArgs args@[k, x, r, a] = do
+parseHasField rn@ResolvedNames{..} =
+    parseConstraint clsHasField $ \case
+      args@[k, x, r, a] -> do
         -- Check the kind
         tcSymbol <- tyConAppTyCon_maybe k
         guard $ tcSymbol == typeSymbolKindCon
@@ -189,12 +195,9 @@ parseHasField ResolvedNames{..} ct = fmap (L $ ctLoc ct) $
         x' <- isStrLitTy x
 
         -- Check that it's of the form @Record r@
-        (tyRecord, tyFields) <- splitAppTy_maybe r
-        tcRecord <- tyConAppTyCon_maybe tyRecord
-        guard $ tcRecord == tyConRecord
+        tyFields <- parseRecord rn r
+        fields   <- parseFields tyFields
 
-        -- Parse the individual fields
-        fields <- parseFields tyFields
         return $ CHasField {
             hasFieldLabel      = x'
           , hasFieldRecord     = fields
@@ -202,49 +205,107 @@ parseHasField ResolvedNames{..} ct = fmap (L $ ctLoc ct) $
           , hasFieldTypeRecord = tyFields
           , hasFieldTypeField  = a
           }
-    parseHasFieldArgs _invalidNumArgs =
+      _invalidNumArgs ->
         Nothing
 
-    parseFields :: Type -> Maybe Fields
-    parseFields fields = asum [
-          do (f, fs) <- parseCons fields
-             f' <- parseField f
-             (FieldsCons f') <$> parseFields fs
-        , do parseNil fields
-             return FieldsNil
-        ]
+parseConstraintsRecord ::
+     ResolvedNames
+  -> Ct
+  -> ParseResult Void (GenLocated CtLoc CConstraintsRecord)
+parseConstraintsRecord ResolvedNames{..} =
+    parseConstraint clsConstraintsRecord $ \case
+      [r, c] -> do
+        fields <- parseFields r
+        return CConstraintsRecord {
+            constraintsRecordFields     = fields
+          , constraintsRecordConstraint = c
+          }
+      _invalidNumArgs ->
+        Nothing
 
-    parseField :: Type -> Maybe Field
-    parseField field = asum [
-          do (nm, typ) <- parsePair field
-             nm' <- isStrLitTy nm
-             return $ FieldKnown nm' typ
-        ]
+{-------------------------------------------------------------------------------
+  Supporting parsers
+-------------------------------------------------------------------------------}
 
-    -- Parse @x ': xs == (':) x xs == ((':) x) xs@
-    parseCons :: Type -> Maybe (Type, Type)
-    parseCons t = do
-        ( t'  , xs ) <- splitAppTy_maybe t
-        ( t'' , x  ) <- splitAppTy_maybe t'
-        tcCons <- tyConAppTyCon_maybe t''
-        guard $ tcCons == promotedConsDataCon
-        return (x, xs)
+-- | Parse @Record r@
+--
+-- Returns the  argument @r@
+parseRecord :: ResolvedNames -> Type -> Maybe Type
+parseRecord ResolvedNames{..} r = do
+    (tyRecord, tyFields) <- splitAppTy_maybe r
+    tcRecord <- tyConAppTyCon_maybe tyRecord
+    guard $ tcRecord == tyConRecord
+    return tyFields
 
-    -- Parse '[]
-    parseNil :: Type -> Maybe ()
-    parseNil t = do
-        tcNil <- tyConAppTyCon_maybe t
-        guard $ tcNil == promotedNilDataCon
-        return ()
+parseFields :: Type -> Maybe Fields
+parseFields fields = asum [
+      do (f, fs) <- parseCons fields
+         f' <- parseField f
+         (FieldsCons f') <$> parseFields fs
+    , do parseNil fields
+         return FieldsNil
+    ]
 
-    -- Parse @'(x, y) == '(,) x y == ('(,) x) y@
-    parsePair :: Type -> Maybe (Type, Type)
-    parsePair t = do
-        ( t'  , y ) <- splitAppTy_maybe t
-        ( t'' , x ) <- splitAppTy_maybe t'
-        tcPair <- tyConAppTyCon_maybe t''
-        guard $ tcPair == promotedTupleDataCon Boxed 2
-        return (x, y)
+parseField :: Type -> Maybe Field
+parseField field = asum [
+      do (nm, typ) <- parsePair field
+         nm' <- isStrLitTy nm
+         return $ FieldKnown nm' typ
+    ]
+
+{-------------------------------------------------------------------------------
+  Generic (not large-anon specific) parsing utility
+-------------------------------------------------------------------------------}
+
+-- | Generic constraint parser
+--
+-- TODO: If we add some parsing infra to ghc-tcplugin-api, maybe a (form of)
+-- this function could live there too.
+parseConstraint ::
+     Class                -- ^ Class we're matching against
+  -> ([Type] -> Maybe a)  -- ^ Parser for the class arguments
+  -> Ct                   -- ^ Constraint to parse
+  -> ParseResult e (GenLocated CtLoc a)
+parseConstraint cls f ct = fmap (L $ ctLoc ct) $
+    case classifyPredType (ctPred ct) of
+      ClassPred cls' args | cls == cls' ->
+        case f args of
+          Just parsed ->
+            ParseOk parsed
+          Nothing ->
+            panic $ concat [
+                "Unexpected "
+              , showSDocUnsafe (ppr cls)
+              , " constraint with arguments:\n"
+              , unlines (map (showSDocUnsafe . ppr) args)
+              ]
+      _otherwise ->
+        ParseNoMatch
+
+-- | Parse @x ': xs == (':) x xs == ((':) x) xs@
+parseCons :: Type -> Maybe (Type, Type)
+parseCons t = do
+    ( t'  , xs ) <- splitAppTy_maybe t
+    ( t'' , x  ) <- splitAppTy_maybe t'
+    tcCons <- tyConAppTyCon_maybe t''
+    guard $ tcCons == promotedConsDataCon
+    return (x, xs)
+
+-- | Parse @'[]@
+parseNil :: Type -> Maybe ()
+parseNil t = do
+    tcNil <- tyConAppTyCon_maybe t
+    guard $ tcNil == promotedNilDataCon
+    return ()
+
+-- | Parse @'(x, y) == '(,) x y == ('(,) x) y@
+parsePair :: Type -> Maybe (Type, Type)
+parsePair t = do
+    ( t'  , y ) <- splitAppTy_maybe t
+    ( t'' , x ) <- splitAppTy_maybe t'
+    tcPair <- tyConAppTyCon_maybe t''
+    guard $ tcPair == promotedTupleDataCon Boxed 2
+    return (x, y)
 
 {-------------------------------------------------------------------------------
   Evidence
