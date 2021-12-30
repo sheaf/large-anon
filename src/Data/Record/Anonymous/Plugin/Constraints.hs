@@ -254,6 +254,7 @@ parseHasField ResolvedNames{..} ct = fmap (L $ ctLoc ct) $
 
 evidenceHasField :: ResolvedNames -> CHasField -> TcPluginM 'Solve EvTerm
 evidenceHasField ResolvedNames{..} CHasField{..} = do
+    str <- mkStringExprFS hasFieldLabel
     return $
       evDataConApp
         (classDataCon clsHasField)
@@ -261,7 +262,7 @@ evidenceHasField ResolvedNames{..} CHasField{..} = do
         [ mkCoreApps (Var idUnsafeRecordHasField) [
               Type hasFieldTypeRecord
             , Type hasFieldTypeField
-            -- _ (mkStringExprFS hasFieldLabel
+            , str
             ]
         ]
 

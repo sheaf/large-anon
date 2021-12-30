@@ -13,7 +13,7 @@ import Data.Record.Anonymous.Plugin.GhcTcPluginAPI
 import Data.Record.Anonymous.Plugin.NameResolution
 
 solve :: ResolvedNames -> TcPluginSolver
-solve rn given wanted = trace debugOutput $ do
+solve rn given wanted = {- trace debugOutput $ -} do
     (solved, new) <- fmap (unzip . catMaybes) $
       forM parsedHasField $ uncurry (solveHasField rn)
     return $ TcPluginOk solved new
@@ -21,8 +21,8 @@ solve rn given wanted = trace debugOutput $ do
     parsedHasField :: [(Ct, GenLocated CtLoc CHasField)]
     parsedHasField = parseAll' (withOrig (parseHasField rn)) wanted
 
-    debugOutput :: String
-    debugOutput = unlines [
+    _debugOutput :: String
+    _debugOutput = unlines [
           "*** solve"
         , "given:          " ++ showSDocUnsafe (ppr given)
         , "wanted:         " ++ showSDocUnsafe (ppr wanted)

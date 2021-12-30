@@ -62,5 +62,26 @@ insert (Field l) a (MkR r) = MkR $ Map.insert (symbolVal l) (unsafeCoerce a) r
   Internal API
 -------------------------------------------------------------------------------}
 
-unsafeRecordHasField :: forall r a. Record r -> (a -> Record r, a)
-unsafeRecordHasField = error $ "TODO: unsafeRecordHasField: " -- ++ show label
+-- | Suitable implementation for a (plugin derived) 'HasField' instance
+--
+-- Precondition: the record must have the specified field with type @a@
+-- (this precondition is verified by the plugin before generating "evidence"
+-- that uses this function)
+unsafeRecordHasField :: forall r a. String -> Record r -> (a -> Record r, a)
+unsafeRecordHasField label (MkR r) = (
+      \a -> MkR $ Map.insert label (unsafeCoerce a) r
+    , case Map.lookup label r of
+        Just f  -> unsafeCoerce f
+        Nothing -> error preconditionViolation
+    )
+  where
+    preconditionViolation :: String
+    preconditionViolation = concat [
+          "unsafeRecordHasField precondition violation: field "
+        , label
+        , " not found"
+        ]
+
+
+
+

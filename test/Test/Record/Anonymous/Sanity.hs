@@ -30,8 +30,9 @@ simpleRecord =
 
 test_HasField :: Assertion
 test_HasField = do
-    assertEqual "get first field" (R.get #x simpleRecord) True
-    assertEqual "get first field" (R.get #y simpleRecord) 'y'
-    assertEqual "get first field" (R.get #z simpleRecord) ()
+    assertEqual "get field 1" (R.get #x simpleRecord) True
+    assertEqual "get field 2" (R.get #y simpleRecord) 'a'
+    assertEqual "get field 3" (R.get #z simpleRecord) ()
+
 
 -- TODO: Tests for type errors (missing fields, wrong field type, ..)
