@@ -1,4 +1,5 @@
 {-# LANGUAGE DeriveFunctor       #-}
+{-# LANGUAGE NamedFieldPuns      #-}
 {-# LANGUAGE RecordWildCards     #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections       #-}
@@ -20,6 +21,8 @@ module Data.Record.Anonymous.Plugin.Constraints (
   , withOrig
     -- ** Specific parsers
   , parseHasField
+    -- * Evidence
+  , evidenceHasField
   ) where
 
 import Control.Monad
@@ -33,6 +36,7 @@ import GHC.Utils.Outputable
 -- (And once we do, make sure we just import that module, like in typelet)
 import Type (tyConAppTyCon_maybe, splitAppTy_maybe, isStrLitTy)
 import BasicTypes (Boxity(Boxed))
+import CoreSyn (Expr(App))
 
 import Data.Record.Anonymous.Plugin.NameResolution
 import Data.Foldable (asum)
@@ -54,8 +58,16 @@ data CHasField = CHasField {
       -- These may be fully or partially known, or completely unknown.
     , hasFieldRecord :: Fields
 
+      -- | The raw type arguments to the @HasField@ instance
+      --
+      -- We use these to provide evidence of precise the same that ghc wants
+    , hasFieldTypeRaw :: [Type]
+
+      -- | The type of the record (the @r@ in @Record r@)
+    , hasFieldTypeRecord :: Type
+
       -- | Type of the record field we're looking for
-    , hasFieldType :: Type
+    , hasFieldTypeField :: Type
     }
 
 -- TODO: Will need extension for the polymorphic case
@@ -86,7 +98,7 @@ instance Outputable CHasField where
           text "CHasField"
       <+> ppr hasFieldLabel
       <+> ppr hasFieldRecord
-      <+> ppr hasFieldType
+      <+> ppr hasFieldTypeField
 
 instance Outputable Fields where
   ppr (FieldsCons f fs) = parens $
@@ -172,7 +184,7 @@ parseHasField ResolvedNames{..} ct = fmap (L $ ctLoc ct) $
         ParseNoMatch
   where
     parseHasFieldArgs :: [Type] -> Maybe CHasField
-    parseHasFieldArgs [k, x, r, a] = do
+    parseHasFieldArgs args@[k, x, r, a] = do
         -- Check the kind
         tcSymbol <- tyConAppTyCon_maybe k
         guard $ tcSymbol == typeSymbolKindCon
@@ -187,7 +199,13 @@ parseHasField ResolvedNames{..} ct = fmap (L $ ctLoc ct) $
 
         -- Parse the individual fields
         fields <- parseFields tyFields
-        return $ CHasField x' fields a
+        return $ CHasField {
+            hasFieldLabel      = x'
+          , hasFieldRecord     = fields
+          , hasFieldTypeRaw    = args
+          , hasFieldTypeRecord = tyFields
+          , hasFieldTypeField  = a
+          }
     parseHasFieldArgs _invalidNumArgs =
         Nothing
 
@@ -232,3 +250,30 @@ parseHasField ResolvedNames{..} ct = fmap (L $ ctLoc ct) $
         guard $ tcPair == promotedTupleDataCon Boxed 2
         return (x, y)
 
+{-------------------------------------------------------------------------------
+  Evidence
+
+  During development may want to compile with -dcore-lint.
+-------------------------------------------------------------------------------}
+
+  {-
+    Binder's type:
+      HasField "z" (Record '[ '("x", Bool), '("y", Char), '("z", ())]) ()
+    Rhs type:
+         (    Record '[ '("x", Bool), '("y", Char), '("z", ())]
+           -> ( () -> Record '[ '("x", Bool), '("y", Char), '("z", ())]
+              , ()
+              )
+         )
+      -> HasField "z" (Record '[ '("x", Bool), '("y", Char), '("z", ())]) ()
+-}
+
+evidenceHasField :: ResolvedNames -> CHasField -> EvTerm
+evidenceHasField ResolvedNames{..} CHasField{..} =
+    evDataConApp
+      (classDataCon clsHasField)
+      hasFieldTypeRaw
+      [       Var idUnsafeRecordHasField
+        `App` Type hasFieldTypeRecord
+        `App` Type hasFieldTypeField
+      ]

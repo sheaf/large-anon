@@ -15,6 +15,9 @@ library
   exposed-modules:
       Data.Record.Anonymous
       Data.Record.Anonymous.Plugin
+
+      -- Exposed for the benefit of the plugin
+      Data.Record.Anonymous.Internal
   other-modules:
       Data.Record.Anonymous.Plugin.Constraints
       Data.Record.Anonymous.Plugin.NameResolution

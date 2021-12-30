@@ -17,7 +17,7 @@ import Data.Record.Anonymous.Plugin.NameResolution
 solve :: ResolvedNames -> TcPluginSolver
 solve rn given wanted = trace debugOutput $ do
     (solved, new) <- fmap (unzip . catMaybes) $
-      forM parsedHasField $ uncurry solveHasField
+      forM parsedHasField $ uncurry (solveHasField rn)
     return $ TcPluginOk solved new
   where
     parsedHasField :: [(Ct, GenLocated CtLoc CHasField)]
@@ -32,18 +32,22 @@ solve rn given wanted = trace debugOutput $ do
         ]
 
 solveHasField ::
-     Ct
+     ResolvedNames
+  -> Ct
   -> GenLocated CtLoc CHasField
   -> TcPluginM 'Solve (Maybe ((EvTerm, Ct), Ct))
-solveHasField orig (L l CHasField{..}) =
+solveHasField rn orig (L l hf@CHasField{..}) =
     case findField hasFieldLabel hasFieldRecord of
       Nothing ->
         -- TODO: If the record is fully known, we should issue a custom type
         -- error here rather than leaving the constraint unsolved
         return Nothing
       Just typ -> do
-        eq <- newWanted' l $ mkPrimEqPredRole Nominal hasFieldType typ
-        return $ Just ((undefined, orig), mkNonCanonical eq)
+        eq <- newWanted' l $ mkPrimEqPredRole Nominal hasFieldTypeField typ
+        return $ Just (
+            (evidenceHasField rn hf, orig)
+          , mkNonCanonical eq
+          )
 
 -- Construct new wnated constraint
 --
