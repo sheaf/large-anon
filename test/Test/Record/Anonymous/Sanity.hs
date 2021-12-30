@@ -5,6 +5,8 @@
 
 module Test.Record.Anonymous.Sanity (tests) where
 
+import Data.Record.Anonymous.Internal (gshowRecord) -- TODO: temporary
+
 import qualified Data.Record.Anonymous as R
 
 import Test.Tasty
@@ -13,6 +15,7 @@ import Test.Tasty.HUnit
 tests :: TestTree
 tests = testGroup "Test.Record.Anonymous.Sanity" [
       testCase "HasField" test_HasField
+    , testCase "Show"     test_Show
     ]
 
 {-------------------------------------------------------------------------------
@@ -47,3 +50,7 @@ test_HasField = do
       'a'
 
     -- TODO: think about and test what happens with duplicate labels
+
+test_Show :: Assertion
+test_Show = do
+    putStrLn $ gshowRecord simpleRecord

@@ -8,6 +8,7 @@
 {-# LANGUAGE TypeApplications      #-}
 {-# LANGUAGE TypeFamilies          #-}
 {-# LANGUAGE TypeOperators         #-}
+{-# LANGUAGE FlexibleContexts #-}
 
 module Data.Record.Anonymous.Internal (
     -- * Types
@@ -18,10 +19,12 @@ module Data.Record.Anonymous.Internal (
   , insert
     -- * Internal API
   , unsafeRecordHasField
+  , gshowRecord
   ) where
 
 import Data.Coerce (coerce)
 import Data.Kind
+import Data.List (intercalate)
 import Data.Map (Map)
 import Data.Proxy
 import GHC.Exts (Any)
@@ -33,6 +36,7 @@ import qualified Data.Map as Map
 
 import Data.Record.Generic
 
+import qualified Data.Record.Generic.Rep          as Rep
 import qualified Data.Record.Generic.Rep.Internal as Rep
 
 {-------------------------------------------------------------------------------
@@ -112,3 +116,22 @@ instance Generic (Record r) where
   to = error "to: not yet defined (we need to reconstruct the field names)"
 
   metadata = error "metadata not yet supported"
+
+{-------------------------------------------------------------------------------
+  Instances
+
+  These depend on generics.
+-------------------------------------------------------------------------------}
+
+gshowRecord :: ConstraintsRecord r Show => Record r -> String
+gshowRecord = combine . Rep.collapse . Rep.cmap (Proxy @Show) aux . from
+  where
+    aux :: Show x => I x -> K String x
+    aux (I x) = K (show x)
+
+    combine :: [String] -> String
+    combine fs = concat [
+          "Record {"
+        , intercalate ", " fs
+        , "}"
+        ]
