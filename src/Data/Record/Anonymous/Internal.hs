@@ -17,9 +17,11 @@ module Data.Record.Anonymous.Internal (
     -- * User-visible API
   , empty
   , insert
+    -- * Generic functions
+  , gshowRecord
     -- * Internal API
   , unsafeRecordHasField
-  , gshowRecord
+  , unsafeDictRecord
   ) where
 
 import Data.Coerce (coerce)
@@ -70,30 +72,6 @@ insert :: Field l -> a -> Record r -> Record ('(l, a) ': r)
 insert (Field l) a (MkR r) = MkR $ Map.insert (symbolVal l) (unsafeCoerce a) r
 
 {-------------------------------------------------------------------------------
-  Internal API
--------------------------------------------------------------------------------}
-
--- | Suitable implementation for a (plugin derived) 'HasField' instance
---
--- Precondition: the record must have the specified field with type @a@
--- (this precondition is verified by the plugin before generating "evidence"
--- that uses this function)
-unsafeRecordHasField :: forall r a. String -> Record r -> (a -> Record r, a)
-unsafeRecordHasField label (MkR r) = (
-      \a -> MkR $ Map.insert label (unsafeCoerce a) r
-    , case Map.lookup label r of
-        Just f  -> unsafeCoerce f
-        Nothing -> error preconditionViolation
-    )
-  where
-    preconditionViolation :: String
-    preconditionViolation = concat [
-          "unsafeRecordHasField precondition violation: field "
-        , label
-        , " not found"
-        ]
-
-{-------------------------------------------------------------------------------
   Generics
 -------------------------------------------------------------------------------}
 
@@ -135,3 +113,31 @@ gshowRecord = combine . Rep.collapse . Rep.cmap (Proxy @Show) aux . from
         , intercalate ", " fs
         , "}"
         ]
+
+{-------------------------------------------------------------------------------
+  Internal API
+-------------------------------------------------------------------------------}
+
+-- | Suitable implementation for a plugin-derived 'HasField' instance
+--
+-- Precondition: the record must have the specified field with type @a@
+-- (this precondition is verified by the plugin before generating "evidence"
+-- that uses this function)
+unsafeRecordHasField :: forall r a. String -> Record r -> (a -> Record r, a)
+unsafeRecordHasField label (MkR r) = (
+      \a -> MkR $ Map.insert label (unsafeCoerce a) r
+    , case Map.lookup label r of
+        Just f  -> unsafeCoerce f
+        Nothing -> error preconditionViolation
+    )
+  where
+    preconditionViolation :: String
+    preconditionViolation = concat [
+          "unsafeRecordHasField precondition violation: field "
+        , label
+        , " not found"
+        ]
+
+-- | Suitable implementation for a plugin-derived 'ConstraintsRecord' instance
+unsafeDictRecord :: forall r c. Proxy c -> Rep (Dict c) (Record r)
+unsafeDictRecord = undefined

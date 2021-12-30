@@ -5,6 +5,7 @@ module Data.Record.Anonymous.Plugin.Solver (
     solve
   ) where
 
+import Data.Bifunctor
 import Data.Maybe (catMaybes)
 import Data.Traversable (forM)
 
@@ -18,8 +19,8 @@ import Data.Record.Internal.Util (concatM)
 -------------------------------------------------------------------------------}
 
 solve :: ResolvedNames -> TcPluginSolver
-solve rn given wanted = trace _debugOutput $ do
-    (solved, new) <- fmap (unzip . catMaybes) $ concatM [
+solve rn given wanted = {- trace _debugOutput $ -} do
+    (solved, new) <- fmap (bimap catMaybes concat . unzip) $ concatM [
         forM parsedHasField $
           uncurry (solveHasField rn)
       , forM parsedConstraintsRecord $
@@ -52,17 +53,20 @@ solveHasField ::
      ResolvedNames
   -> Ct
   -> GenLocated CtLoc CHasField
-  -> TcPluginM 'Solve (Maybe ((EvTerm, Ct), Ct))
+  -> TcPluginM 'Solve (Maybe (EvTerm, Ct), [Ct])
 solveHasField rn orig (L l hf@CHasField{..}) =
     case findField hasFieldLabel hasFieldRecord of
       Nothing ->
         -- TODO: If the record is fully known, we should issue a custom type
         -- error here rather than leaving the constraint unsolved
-        return Nothing
+        return (Nothing, [])
       Just typ -> do
         eq <- newWanted' l $ mkPrimEqPredRole Nominal hasFieldTypeField typ
         ev <- evidenceHasField rn hf
-        return $ Just ((ev, orig), mkNonCanonical eq)
+        return (
+            Just (ev, orig)
+          , [mkNonCanonical eq]
+          )
 
 {-------------------------------------------------------------------------------
   ConstraintsRecord
@@ -72,15 +76,19 @@ solveConstraintsRecord ::
      ResolvedNames
   -> Ct
   -> GenLocated CtLoc CConstraintsRecord
-  -> TcPluginM 'Solve (Maybe ((EvTerm, Ct), Ct))
-solveConstraintsRecord rn orig (L l cr@CConstraintsRecord{..}) =
-    return Nothing
+  -> TcPluginM 'Solve (Maybe (EvTerm, Ct), [Ct])
+solveConstraintsRecord rn orig (L l cr@CConstraintsRecord{..}) = do
+    ev <- evidenceConstraintsRecord rn cr
+    return (
+        Just (ev, orig)
+      , []
+      )
 
 {-------------------------------------------------------------------------------
   Auxiliary
 -------------------------------------------------------------------------------}
 
--- Construct new wanted constraint
+-- | Construct new wanted constraint
 --
 -- Work-around bug in ghc, making sure the location is set correctly.
 -- TODO: Should this live in ghc-tcplugin-api?

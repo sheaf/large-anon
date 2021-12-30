@@ -13,6 +13,7 @@ data ResolvedNames = ResolvedNames {
     , clsConstraintsRecord   :: Class
     , tyConRecord            :: TyCon
     , idUnsafeRecordHasField :: Id
+    , idUnsafeDictRecord     :: Id
     }
 
 nameResolution :: TcPluginM 'Init ResolvedNames
@@ -27,10 +28,14 @@ nameResolution = do
       getClass ghcRecordsCompat "HasField"
     clsConstraintsRecord <-
       getClass dataRecordAnonymousInternal "ConstraintsRecord"
+
     tyConRecord <-
       getTyCon dataRecordAnonymousInternal "Record"
+
     idUnsafeRecordHasField <-
       getVar dataRecordAnonymousInternal "unsafeRecordHasField"
+    idUnsafeDictRecord <-
+      getVar dataRecordAnonymousInternal "unsafeDictRecord"
 
     return $ ResolvedNames {..}
 

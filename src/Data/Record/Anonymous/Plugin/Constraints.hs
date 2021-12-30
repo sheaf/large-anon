@@ -27,6 +27,7 @@ module Data.Record.Anonymous.Plugin.Constraints (
   , parseConstraintsRecord
     -- * Evidence
   , evidenceHasField
+  , evidenceConstraintsRecord
   ) where
 
 import Control.Monad
@@ -57,9 +58,7 @@ data CHasField = CHasField {
       -- These may be fully or partially known, or completely unknown.
     , hasFieldRecord :: Fields
 
-      -- | The raw type arguments to the @HasField@ instance
-      --
-      -- We use these to provide evidence of precise the same that ghc wants
+      -- | Raw arguments to @HasField@ (for evidence construction)
     , hasFieldTypeRaw :: [Type]
 
       -- | The type of the record (the @r@ in @Record r@)
@@ -73,8 +72,14 @@ data CConstraintsRecord = CConstraintsRecord {
       -- | Fields of the record
       constraintsRecordFields :: Fields
 
+      -- | Raw arguments to @ConstraintsRecord@ (for evidence construction)
+    , constraintsRecordTypeRaw :: [Type]
+
+      -- | The type of the record (the @r@ in @Record r@)
+    , constraintsRecordTypeRecord :: Type
+
       -- | The constraint that we need for every field
-    , constraintsRecordConstraint :: Type
+    , constraintsRecordTypeConstraint :: Type
     }
 
 -- TODO: Will need extension for the polymorphic case
@@ -101,17 +106,21 @@ findField nm = go
 -------------------------------------------------------------------------------}
 
 instance Outputable CHasField where
-  ppr CHasField{..} = parens $
+  ppr (CHasField label record typeRaw typeRecord typeField) = parens $
           text "CHasField"
-      <+> ppr hasFieldLabel
-      <+> ppr hasFieldRecord
-      <+> ppr hasFieldTypeField
+      <+> ppr label
+      <+> ppr record
+      <+> ppr typeRaw
+      <+> ppr typeRecord
+      <+> ppr typeField
 
 instance Outputable CConstraintsRecord where
-  ppr CConstraintsRecord{..} = parens $
+  ppr (CConstraintsRecord fields typeRaw typeRecord typeConstraint) = parens $
           text "CConstraintsRecord"
-      <+> ppr constraintsRecordFields
-      <+> ppr constraintsRecordConstraint
+      <+> ppr fields
+      <+> ppr typeRaw
+      <+> ppr typeRecord
+      <+> ppr typeConstraint
 
 instance Outputable Fields where
   ppr (FieldsCons f fs) = parens $
@@ -214,11 +223,13 @@ parseConstraintsRecord ::
   -> ParseResult Void (GenLocated CtLoc CConstraintsRecord)
 parseConstraintsRecord ResolvedNames{..} =
     parseConstraint clsConstraintsRecord $ \case
-      [r, c] -> do
+      args@[r, c] -> do
         fields <- parseFields r
         return CConstraintsRecord {
-            constraintsRecordFields     = fields
-          , constraintsRecordConstraint = c
+            constraintsRecordFields         = fields
+          , constraintsRecordTypeRaw        = args
+          , constraintsRecordTypeRecord     = r
+          , constraintsRecordTypeConstraint = c
           }
       _invalidNumArgs ->
         Nothing
@@ -313,7 +324,10 @@ parsePair t = do
   During development may want to compile with -dcore-lint.
 -------------------------------------------------------------------------------}
 
-evidenceHasField :: ResolvedNames -> CHasField -> TcPluginM 'Solve EvTerm
+evidenceHasField ::
+     ResolvedNames
+  -> CHasField
+  -> TcPluginM 'Solve EvTerm
 evidenceHasField ResolvedNames{..} CHasField{..} = do
     str <- mkStringExprFS hasFieldLabel
     return $
@@ -324,6 +338,21 @@ evidenceHasField ResolvedNames{..} CHasField{..} = do
               Type hasFieldTypeRecord
             , Type hasFieldTypeField
             , str
+            ]
+        ]
+
+evidenceConstraintsRecord ::
+     ResolvedNames
+  -> CConstraintsRecord
+  -> TcPluginM 'Solve EvTerm
+evidenceConstraintsRecord ResolvedNames{..} CConstraintsRecord{..} = do
+    return $
+      evDataConApp
+        (classDataCon clsConstraintsRecord)
+        constraintsRecordTypeRaw
+        [ mkCoreApps (Var idUnsafeDictRecord) [
+              Type constraintsRecordTypeRecord
+            , Type constraintsRecordTypeConstraint
             ]
         ]
 
