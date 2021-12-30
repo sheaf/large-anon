@@ -11,11 +11,20 @@ import Data.Traversable (forM)
 import Data.Record.Anonymous.Plugin.Constraints
 import Data.Record.Anonymous.Plugin.GhcTcPluginAPI
 import Data.Record.Anonymous.Plugin.NameResolution
+import Data.Record.Internal.Util (concatM)
+
+{-------------------------------------------------------------------------------
+  Top-level solver
+-------------------------------------------------------------------------------}
 
 solve :: ResolvedNames -> TcPluginSolver
 solve rn given wanted = trace _debugOutput $ do
-    (solved, new) <- fmap (unzip . catMaybes) $
-      forM parsedHasField $ uncurry (solveHasField rn)
+    (solved, new) <- fmap (unzip . catMaybes) $ concatM [
+        forM parsedHasField $
+          uncurry (solveHasField rn)
+      , forM parsedConstraintsRecord $
+          uncurry (solveConstraintsRecord rn)
+      ]
     return $ TcPluginOk solved new
   where
     parsedHasField          :: [(Ct, GenLocated CtLoc CHasField)]
@@ -35,6 +44,10 @@ solve rn given wanted = trace _debugOutput $ do
         , "parsedContraintsRecord: " ++ showSDocUnsafe (ppr parsedConstraintsRecord)
         ]
 
+{-------------------------------------------------------------------------------
+  HasField
+-------------------------------------------------------------------------------}
+
 solveHasField ::
      ResolvedNames
   -> Ct
@@ -50,6 +63,22 @@ solveHasField rn orig (L l hf@CHasField{..}) =
         eq <- newWanted' l $ mkPrimEqPredRole Nominal hasFieldTypeField typ
         ev <- evidenceHasField rn hf
         return $ Just ((ev, orig), mkNonCanonical eq)
+
+{-------------------------------------------------------------------------------
+  ConstraintsRecord
+-------------------------------------------------------------------------------}
+
+solveConstraintsRecord ::
+     ResolvedNames
+  -> Ct
+  -> GenLocated CtLoc CConstraintsRecord
+  -> TcPluginM 'Solve (Maybe ((EvTerm, Ct), Ct))
+solveConstraintsRecord rn orig (L l cr@CConstraintsRecord{..}) =
+    return Nothing
+
+{-------------------------------------------------------------------------------
+  Auxiliary
+-------------------------------------------------------------------------------}
 
 -- Construct new wanted constraint
 --
