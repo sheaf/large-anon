@@ -19,6 +19,10 @@ import GHC.Records.Compat
 
 import Data.Record.Anonymous.Internal
 
+{-------------------------------------------------------------------------------
+  Convenience functions
+-------------------------------------------------------------------------------}
+
 -- | Get record field
 --
 -- This is a simple wrapper for 'getField'.
@@ -34,4 +38,3 @@ set :: forall l r a.
      HasField l (Record r) a
   => Field l -> a -> Record r -> Record r
 set _ = flip (setField @l @(Record r))
-

@@ -23,10 +23,10 @@ tests = testGroup "Test.Record.Anonymous.Sanity" [
 
 simpleRecord :: R.Record '[ '("x", Bool), '("y", Char), '("z", ()) ]
 simpleRecord =
-     R.insert #x True
-   $ R.insert #y 'a'
-   $ R.insert #z ()
-   $ R.empty
+      R.insert #x True
+    $ R.insert #y 'a'
+    $ R.insert #z ()
+    $ R.empty
 
 test_HasField :: Assertion
 test_HasField = do
@@ -34,5 +34,16 @@ test_HasField = do
     assertEqual "get field 2" (R.get #y simpleRecord) 'a'
     assertEqual "get field 3" (R.get #z simpleRecord) ()
 
+    -- TODO: We should do whole-record comparisons, but for that we need
+    -- Show and Eq instances, which will depend on generics
 
--- TODO: Tests for type errors (missing fields, wrong field type, ..)
+    assertEqual
+      "set field 1, then get field 1"
+      (R.get #x (R.set #x False simpleRecord))
+      False
+    assertEqual
+      "set field 1, then get field 2"
+      (R.get #y (R.set #x False simpleRecord))
+      'a'
+
+    -- TODO: think about and test what happens with duplicate labels
