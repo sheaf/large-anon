@@ -20,6 +20,7 @@ library
       Data.Record.Anonymous.Internal
   other-modules:
       Data.Record.Anonymous.Plugin.Constraints
+      Data.Record.Anonymous.Plugin.GhcTcPluginAPI
       Data.Record.Anonymous.Plugin.NameResolution
       Data.Record.Anonymous.Plugin.Solver
   other-extensions:

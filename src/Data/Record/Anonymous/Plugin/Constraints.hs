@@ -6,6 +6,7 @@
 
 -- TODO: Remove
 {-# OPTIONS_GHC -Wno-orphans #-}
+{-# LANGUAGE DataKinds #-}
 
 module Data.Record.Anonymous.Plugin.Constraints (
     -- * Wanted constraints recognized by the plugin
@@ -27,19 +28,14 @@ module Data.Record.Anonymous.Plugin.Constraints (
 
 import Control.Monad
 import Data.Bifunctor
+import Data.Foldable (asum)
 import Data.Void
 
 import GHC.TcPlugin.API
 import GHC.Utils.Outputable
 
--- TODO: We'll need to shim this
--- (And once we do, make sure we just import that module, like in typelet)
-import Type (tyConAppTyCon_maybe, splitAppTy_maybe, isStrLitTy)
-import BasicTypes (Boxity(Boxed))
-import CoreSyn (Expr(App))
-
+import Data.Record.Anonymous.Plugin.GhcTcPluginAPI
 import Data.Record.Anonymous.Plugin.NameResolution
-import Data.Foldable (asum)
 
 {-------------------------------------------------------------------------------
   Wanted constraints recognized by the plugin
@@ -256,24 +252,16 @@ parseHasField ResolvedNames{..} ct = fmap (L $ ctLoc ct) $
   During development may want to compile with -dcore-lint.
 -------------------------------------------------------------------------------}
 
-  {-
-    Binder's type:
-      HasField "z" (Record '[ '("x", Bool), '("y", Char), '("z", ())]) ()
-    Rhs type:
-         (    Record '[ '("x", Bool), '("y", Char), '("z", ())]
-           -> ( () -> Record '[ '("x", Bool), '("y", Char), '("z", ())]
-              , ()
-              )
-         )
-      -> HasField "z" (Record '[ '("x", Bool), '("y", Char), '("z", ())]) ()
--}
+evidenceHasField :: ResolvedNames -> CHasField -> TcPluginM 'Solve EvTerm
+evidenceHasField ResolvedNames{..} CHasField{..} = do
+    return $
+      evDataConApp
+        (classDataCon clsHasField)
+        hasFieldTypeRaw
+        [ mkCoreApps (Var idUnsafeRecordHasField) [
+              Type hasFieldTypeRecord
+            , Type hasFieldTypeField
+            -- _ (mkStringExprFS hasFieldLabel
+            ]
+        ]
 
-evidenceHasField :: ResolvedNames -> CHasField -> EvTerm
-evidenceHasField ResolvedNames{..} CHasField{..} =
-    evDataConApp
-      (classDataCon clsHasField)
-      hasFieldTypeRaw
-      [       Var idUnsafeRecordHasField
-        `App` Type hasFieldTypeRecord
-        `App` Type hasFieldTypeField
-      ]

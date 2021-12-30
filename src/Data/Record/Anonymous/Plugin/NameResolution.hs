@@ -6,7 +6,7 @@ module Data.Record.Anonymous.Plugin.NameResolution (
   , nameResolution
   ) where
 
-import GHC.TcPlugin.API
+import Data.Record.Anonymous.Plugin.GhcTcPluginAPI
 
 data ResolvedNames = ResolvedNames {
       clsHasField            :: Class

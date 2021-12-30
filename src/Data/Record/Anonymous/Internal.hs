@@ -63,4 +63,4 @@ insert (Field l) a (MkR r) = MkR $ Map.insert (symbolVal l) (unsafeCoerce a) r
 -------------------------------------------------------------------------------}
 
 unsafeRecordHasField :: forall r a. Record r -> (a -> Record r, a)
-unsafeRecordHasField = error "TODO: unsafeRecordHasField"
+unsafeRecordHasField = error $ "TODO: unsafeRecordHasField: " -- ++ show label

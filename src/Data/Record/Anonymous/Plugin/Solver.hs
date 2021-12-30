@@ -8,10 +8,8 @@ module Data.Record.Anonymous.Plugin.Solver (
 import Data.Maybe (catMaybes)
 import Data.Traversable (forM)
 
-import GHC.TcPlugin.API
-import GHC.Utils.Outputable
-
 import Data.Record.Anonymous.Plugin.Constraints
+import Data.Record.Anonymous.Plugin.GhcTcPluginAPI
 import Data.Record.Anonymous.Plugin.NameResolution
 
 solve :: ResolvedNames -> TcPluginSolver
@@ -44,12 +42,10 @@ solveHasField rn orig (L l hf@CHasField{..}) =
         return Nothing
       Just typ -> do
         eq <- newWanted' l $ mkPrimEqPredRole Nominal hasFieldTypeField typ
-        return $ Just (
-            (evidenceHasField rn hf, orig)
-          , mkNonCanonical eq
-          )
+        ev <- evidenceHasField rn hf
+        return $ Just ((ev, orig), mkNonCanonical eq)
 
--- Construct new wnated constraint
+-- Construct new wanted constraint
 --
 -- Work-around bug in ghc, making sure the location is set correctly.
 -- TODO: Should this live in ghc-tcplugin-api?
