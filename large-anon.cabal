@@ -31,6 +31,10 @@ library
     , ghc-tcplugin-api >= 0.6.1
     , record-hasfield
 
+      -- TODO: We depend on this only for its generics interface
+      -- Should we pull that out into its own package?
+    , large-records
+
       -- Whatever version is bundled with ghc
     , ghc
   hs-source-dirs:

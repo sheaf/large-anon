@@ -1,10 +1,12 @@
 {-# LANGUAGE DataKinds             #-}
 {-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE GADTs                 #-}
+{-# LANGUAGE InstanceSigs          #-}
 {-# LANGUAGE KindSignatures        #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE ScopedTypeVariables   #-}
 {-# LANGUAGE TypeApplications      #-}
+{-# LANGUAGE TypeFamilies          #-}
 {-# LANGUAGE TypeOperators         #-}
 
 module Data.Record.Anonymous.Internal (
@@ -18,6 +20,7 @@ module Data.Record.Anonymous.Internal (
   , unsafeRecordHasField
   ) where
 
+import Data.Coerce (coerce)
 import Data.Kind
 import Data.Map (Map)
 import Data.Proxy
@@ -27,6 +30,10 @@ import GHC.TypeLits
 import Unsafe.Coerce (unsafeCoerce)
 
 import qualified Data.Map as Map
+
+import Data.Record.Generic
+
+import qualified Data.Record.Generic.Rep.Internal as Rep
 
 {-------------------------------------------------------------------------------
   Types
@@ -82,6 +89,26 @@ unsafeRecordHasField label (MkR r) = (
         , " not found"
         ]
 
+{-------------------------------------------------------------------------------
+  Generics
+-------------------------------------------------------------------------------}
 
+class ConstraintsRecord (r :: [(Symbol, Type)]) (c :: Type -> Constraint) where
+  dictRecord :: Proxy c -> Rep (Dict c) (Record r)
 
+instance Generic (Record r) where
+  type Constraints (Record r) = ConstraintsRecord r
+  type MetadataOf  (Record r) = r
 
+  dict = dictRecord
+
+  from :: Record r -> Rep I (Record r)
+  from (MkR r) = Rep.unsafeFromListAny (aux $ Map.elems r)
+    where
+      aux :: [Any] -> [I Any]
+      aux = coerce
+
+  to :: Rep I (Record r) -> Record r
+  to = error "to: not yet defined (we need to reconstruct the field names)"
+
+  metadata = error "metadata not yet supported"
