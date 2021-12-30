@@ -18,6 +18,7 @@ module Data.Record.Anonymous.Plugin.GhcTcPluginAPI (
   , Boxity(Boxed)
     -- ** Names
   , showClassName
+  , typeTyConName
   ) where
 
 import GHC.TcPlugin.API
@@ -29,6 +30,7 @@ import Type (tyConAppTyCon_maybe, splitAppTy_maybe, isStrLitTy)
 import BasicTypes (Boxity(Boxed))
 import GhcPlugins (MonadThings(lookupThing))
 import PrelNames (showClassName)
+import THNames (typeTyConName)
 
 instance ( Monad (TcPluginM s)
          , MonadTcPlugin (TcPluginM s)

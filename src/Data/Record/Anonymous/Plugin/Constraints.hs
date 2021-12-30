@@ -359,9 +359,13 @@ evidenceHasField ResolvedNames{..} CHasField{..} = do
             ]
         ]
 
+-- | Construct evidence for 'ConstraintsClass'
+--
+-- The evidence for the fields must be specified in the right order
+-- (see 'Generic' instance for 'Record').
 evidenceConstraintsRecord ::
      ResolvedNames
-  -> [EvVar]  -- Evidence for each field of the record, in order
+  -> [(EvVar, Type)]  -- Evidence for and type of each field of the record
   -> CConstraintsRecord
   -> TcPluginM 'Solve EvTerm
 evidenceConstraintsRecord ResolvedNames{..} cs CConstraintsRecord{..} = do
@@ -372,7 +376,7 @@ evidenceConstraintsRecord ResolvedNames{..} cs CConstraintsRecord{..} = do
         [ mkCoreApps (Var idUnsafeDictRecord) [
               Type constraintsRecordTypeRecord
             , Type constraintsRecordTypeConstraint
-            , mkListExpr dictType []
+            , mkListExpr dictType (map (uncurry mkDictAny) cs)
             ]
         ]
   where
@@ -380,6 +384,22 @@ evidenceConstraintsRecord ResolvedNames{..} cs CConstraintsRecord{..} = do
     dictType = mkTyConApp tyConDict [
           liftedTypeKind
         , constraintsRecordTypeConstraint
-        , mkTyConApp anyTyCon [liftedTypeKind]
+        , anyType
         ]
+
+    mkDictAny :: EvVar -> Type -> EvExpr
+    mkDictAny dict fieldType = mkCoreConApps dataConDict [
+          Type liftedTypeKind
+        , Type constraintsRecordTypeConstraint
+        , Type anyType
+        , mkCoreApps (Var idUnsafeCoerce) [
+              Type $ mkAppTy constraintsRecordTypeConstraint fieldType
+            , Type $ mkAppTy constraintsRecordTypeConstraint anyType
+            , Var dict
+            ]
+        ]
+
+    -- Any at kind Type
+    anyType :: Type
+    anyType = mkTyConApp anyTyCon [liftedTypeKind]
 

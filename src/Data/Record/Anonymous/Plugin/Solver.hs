@@ -97,13 +97,19 @@ solveConstraintsRecord rn@ResolvedNames{..}
       Just fields -> do
         cs <- forM (Map.elems fields) $ \fieldType -> newWanted' l $
                 mkClassPred clsShow [fieldType]
-        -- Use of ctev_evar is justified here because we know that we are
-        -- requesting evidence for classes, not for (primitive) equality
-        ev <- evidenceConstraintsRecord rn (map ctev_evar cs) cr
+        ev <- evidenceConstraintsRecord
+                rn
+                (zipWith ((,) . getEvVar) cs (Map.elems fields))
+                cr
         return (
             Just (ev, orig)
           , map mkNonCanonical cs
           )
+  where
+    getEvVar :: CtEvidence -> EvVar
+    getEvVar ct = case ctev_dest ct of
+      EvVarDest var -> var
+      HoleDest  _   -> error "impossible (we don't ask for primitive equality)"
 
 {-------------------------------------------------------------------------------
   Auxiliary

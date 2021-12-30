@@ -14,8 +14,10 @@ data ResolvedNames = ResolvedNames {
     , clsShow                :: Class
     , tyConRecord            :: TyCon
     , tyConDict              :: TyCon
+    , dataConDict            :: DataCon
     , idUnsafeRecordHasField :: Id
     , idUnsafeDictRecord     :: Id
+    , idUnsafeCoerce         :: Id
     }
 
 nameResolution :: TcPluginM 'Init ResolvedNames
@@ -27,6 +29,8 @@ nameResolution = do
       getModule "large-anon" "Data.Record.Anonymous.Internal"
     dataSOPDict <-
       getModule "sop-core" "Data.SOP.Dict"
+    unsafeCoerce <-
+      getModule "base" "Unsafe.Coerce"
 
     clsHasField <-
       getClass ghcRecordsCompat "HasField"
@@ -40,10 +44,15 @@ nameResolution = do
     tyConDict <-
       getTyCon dataSOPDict "Dict"
 
+    dataConDict <-
+      getDataCon dataSOPDict "Dict"
+
     idUnsafeRecordHasField <-
       getVar dataRecordAnonymousInternal "unsafeRecordHasField"
     idUnsafeDictRecord <-
       getVar dataRecordAnonymousInternal "unsafeDictRecord"
+    idUnsafeCoerce <-
+      getVar unsafeCoerce "unsafeCoerce"
 
     return $ ResolvedNames {..}
 
@@ -63,6 +72,9 @@ getClass modl cls = lookupOrig modl (mkTcOcc cls) >>= tcLookupClass
 
 getTyCon :: MonadTcPlugin m => Module -> String -> m TyCon
 getTyCon modl con = lookupOrig modl (mkTcOcc con) >>= tcLookupTyCon
+
+getDataCon :: MonadTcPlugin m => Module -> String -> m DataCon
+getDataCon modl con = lookupOrig modl (mkDataOcc con) >>= tcLookupDataCon
 
 getVar :: MonadTcPlugin m => Module -> String -> m Id
 getVar modl var = lookupOrig modl (mkVarOcc var) >>= tcLookupId
