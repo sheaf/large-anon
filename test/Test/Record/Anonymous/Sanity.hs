@@ -18,13 +18,15 @@ tests = testGroup "Test.Record.Anonymous.Sanity" [
     , testCase "Show"     test_Show
     ]
 
--- 3
-
 {-------------------------------------------------------------------------------
   HasField
 
   These are not size tests, we don't worry about type-level sharing here.
 -------------------------------------------------------------------------------}
+
+-- | The equivalent non-anonymous record (for comparison)
+data Record = Record { x :: Bool, y :: Char, z :: () }
+  deriving (Show)
 
 simpleRecord :: R.Record '[ '("x", Bool), '("y", Char), '("z", ()) ]
 simpleRecord =
@@ -35,24 +37,23 @@ simpleRecord =
 
 test_HasField :: Assertion
 test_HasField = do
-    assertEqual "get field 1" (R.get #x simpleRecord) True
-    assertEqual "get field 2" (R.get #y simpleRecord) 'a'
-    assertEqual "get field 3" (R.get #z simpleRecord) ()
+    assertEqual "get field 1" True $ (R.get #x simpleRecord)
+    assertEqual "get field 2" 'a'  $ (R.get #y simpleRecord)
+    assertEqual "get field 3" ()   $ (R.get #z simpleRecord)
 
     -- TODO: We should do whole-record comparisons, but for that we need
     -- Show and Eq instances, which will depend on generics
 
-    assertEqual
-      "set field 1, then get field 1"
-      (R.get #x (R.set #x False simpleRecord))
-      False
-    assertEqual
-      "set field 1, then get field 2"
+    assertEqual "set field 1, then get field 1" False $
+      R.get #x (R.set #x False simpleRecord)
+    assertEqual "set field 1, then get field 2" 'a' $
       (R.get #y (R.set #x False simpleRecord))
-      'a'
 
     -- TODO: think about and test what happens with duplicate labels
 
 test_Show :: Assertion
 test_Show = do
-    putStrLn $ gshowRecord simpleRecord
+    -- TODO: When we use a wildcard for the expected value here, the plugin
+    -- panics.
+    assertEqual "" (show (Record True 'a' ())) $
+      gshowRecord simpleRecord

@@ -109,13 +109,20 @@ instance RecordMetadata r => Generic (Record r) where
   TODO: Should RecordMetadata be a superclass of RecordConstraints?
 -------------------------------------------------------------------------------}
 
-gshowRecord ::
+gshowRecord :: forall r.
      (RecordMetadata r, RecordConstraints r Show)
   => Record r -> String
-gshowRecord = combine . Rep.collapse . Rep.cmap (Proxy @Show) aux . from
+gshowRecord =
+      combine
+    . Rep.collapse
+    . Rep.czipWith (Proxy @Show) aux names
+    . from
   where
-    aux :: Show x => I x -> K String x
-    aux (I x) = K (show x)
+    names :: Rep (K String) (Record r)
+    names = recordFieldNames $ metadata (Proxy @(Record r))
+
+    aux :: Show x => K String x -> I x -> K String x
+    aux (K name) (I x) = K (name ++ " = " ++ show x)
 
     combine :: [String] -> String
     combine fs = concat [
