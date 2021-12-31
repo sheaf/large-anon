@@ -12,7 +12,8 @@
 module Data.Record.Anonymous.Plugin.Constraints (
     -- * Wanted constraints recognized by the plugin
     CHasField(..)
-  , CConstraintsRecord(..)
+  , CRecordConstraints(..)
+  , CRecordMetadata(..)
   , Fields(..)
   , Field(..)
   , findField
@@ -25,10 +26,11 @@ module Data.Record.Anonymous.Plugin.Constraints (
   , withOrig
     -- ** Specific parsers
   , parseHasField
-  , parseConstraintsRecord
+  , parseRecordConstraints
+  , parseRecordMetadata
     -- * Evidence
   , evidenceHasField
-  , evidenceConstraintsRecord
+  , evidenceRecordConstraints
   ) where
 
 import Control.Monad
@@ -62,25 +64,36 @@ data CHasField = CHasField {
       -- | Raw arguments to @HasField@ (for evidence construction)
     , hasFieldTypeRaw :: [Type]
 
-      -- | The type of the record (the @r@ in @Record r@)
+      -- | Type of the record (the @r@ in @Record r@)
     , hasFieldTypeRecord :: Type
 
       -- | Type of the record field we're looking for
     , hasFieldTypeField :: Type
     }
 
-data CConstraintsRecord = CConstraintsRecord {
+data CRecordConstraints = CRecordConstraints {
       -- | Fields of the record
-      constraintsRecordFields :: Fields
+      recordConstraintsFields :: Fields
 
-      -- | Raw arguments to @ConstraintsRecord@ (for evidence construction)
-    , constraintsRecordTypeRaw :: [Type]
+      -- | Raw arguments to @RecordConstraints@ (for evidence construction)
+    , recordConstraintsTypeRaw :: [Type]
 
-      -- | The type of the record (the @r@ in @Record r@)
-    , constraintsRecordTypeRecord :: Type
+      -- | Type of the record (the @r@ in @Record r@)
+    , recordConstraintsTypeRecord :: Type
 
-      -- | The constraint that we need for every field
-    , constraintsRecordTypeConstraint :: Type
+      -- | Cconstraint that we need for every field
+    , recordConstraintsTypeConstraint :: Type
+    }
+
+data CRecordMetadata = CRecordMetadata {
+      -- | Fields of the record
+      recordMetadataFields :: Fields
+
+      -- | Type of the record (the @r@ in @Record r@)
+      --
+      -- This is the only type argument to @RecordMetadata@, so we don't
+      -- separately record the "raw arguments|/
+    , recordMetadataTypeRecord :: Type
     }
 
 -- TODO: Will need extension for the polymorphic case
@@ -132,13 +145,19 @@ instance Outputable CHasField where
       <+> ppr typeRecord
       <+> ppr typeField
 
-instance Outputable CConstraintsRecord where
-  ppr (CConstraintsRecord fields typeRaw typeRecord typeConstraint) = parens $
-          text "CConstraintsRecord"
+instance Outputable CRecordConstraints where
+  ppr (CRecordConstraints fields typeRaw typeRecord typeConstraint) = parens $
+          text "CRecordConstraints"
       <+> ppr fields
       <+> ppr typeRaw
       <+> ppr typeRecord
       <+> ppr typeConstraint
+
+instance Outputable CRecordMetadata where
+  ppr (CRecordMetadata fields typeRecord) = parens $
+          text "CRecordMetadata"
+      <+> ppr fields
+      <+> ppr typeRecord
 
 instance Outputable Fields where
   ppr (FieldsCons f fs) = parens $
@@ -235,19 +254,34 @@ parseHasField rn@ResolvedNames{..} =
       _invalidNumArgs ->
         Nothing
 
-parseConstraintsRecord ::
+parseRecordConstraints ::
      ResolvedNames
   -> Ct
-  -> ParseResult Void (GenLocated CtLoc CConstraintsRecord)
-parseConstraintsRecord ResolvedNames{..} =
-    parseConstraint clsConstraintsRecord $ \case
+  -> ParseResult Void (GenLocated CtLoc CRecordConstraints)
+parseRecordConstraints ResolvedNames{..} =
+    parseConstraint clsRecordConstraints $ \case
       args@[r, c] -> do
         fields <- parseFields r
-        return CConstraintsRecord {
-            constraintsRecordFields         = fields
-          , constraintsRecordTypeRaw        = args
-          , constraintsRecordTypeRecord     = r
-          , constraintsRecordTypeConstraint = c
+        return CRecordConstraints {
+            recordConstraintsFields         = fields
+          , recordConstraintsTypeRaw        = args
+          , recordConstraintsTypeRecord     = r
+          , recordConstraintsTypeConstraint = c
+          }
+      _invalidNumArgs ->
+        Nothing
+
+parseRecordMetadata ::
+     ResolvedNames
+  -> Ct
+  -> ParseResult Void (GenLocated CtLoc CRecordMetadata)
+parseRecordMetadata ResolvedNames{..} =
+    parseConstraint clsRecordMetadata $ \case
+      [r] -> do
+        fields <- parseFields r
+        return CRecordMetadata {
+            recordMetadataFields     = fields
+          , recordMetadataTypeRecord = r
           }
       _invalidNumArgs ->
         Nothing
@@ -363,19 +397,19 @@ evidenceHasField ResolvedNames{..} CHasField{..} = do
 --
 -- The evidence for the fields must be specified in the right order
 -- (see 'Generic' instance for 'Record').
-evidenceConstraintsRecord ::
+evidenceRecordConstraints ::
      ResolvedNames
   -> [(EvVar, Type)]  -- Evidence for and type of each field of the record
-  -> CConstraintsRecord
+  -> CRecordConstraints
   -> TcPluginM 'Solve EvTerm
-evidenceConstraintsRecord ResolvedNames{..} cs CConstraintsRecord{..} = do
+evidenceRecordConstraints ResolvedNames{..} cs CRecordConstraints{..} = do
     return $
       evDataConApp
-        (classDataCon clsConstraintsRecord)
-        constraintsRecordTypeRaw
+        (classDataCon clsRecordConstraints)
+        recordConstraintsTypeRaw
         [ mkCoreApps (Var idUnsafeDictRecord) [
-              Type constraintsRecordTypeRecord
-            , Type constraintsRecordTypeConstraint
+              Type recordConstraintsTypeRecord
+            , Type recordConstraintsTypeConstraint
             , mkListExpr dictType (map (uncurry mkDictAny) cs)
             ]
         ]
@@ -383,18 +417,18 @@ evidenceConstraintsRecord ResolvedNames{..} cs CConstraintsRecord{..} = do
     dictType :: Type
     dictType = mkTyConApp tyConDict [
           liftedTypeKind
-        , constraintsRecordTypeConstraint
+        , recordConstraintsTypeConstraint
         , anyType
         ]
 
     mkDictAny :: EvVar -> Type -> EvExpr
     mkDictAny dict fieldType = mkCoreConApps dataConDict [
           Type liftedTypeKind
-        , Type constraintsRecordTypeConstraint
+        , Type recordConstraintsTypeConstraint
         , Type anyType
         , mkCoreApps (Var idUnsafeCoerce) [
-              Type $ mkAppTy constraintsRecordTypeConstraint fieldType
-            , Type $ mkAppTy constraintsRecordTypeConstraint anyType
+              Type $ mkAppTy recordConstraintsTypeConstraint fieldType
+            , Type $ mkAppTy recordConstraintsTypeConstraint anyType
             , Var dict
             ]
         ]

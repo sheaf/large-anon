@@ -21,30 +21,49 @@ import Data.Record.Internal.Util (concatM)
 -------------------------------------------------------------------------------}
 
 solve :: ResolvedNames -> TcPluginSolver
-solve rn given wanted = {- trace _debugOutput $ -} do
+solve rn given wanted = trace _debugOutput $ do
     (solved, new) <- fmap (bimap catMaybes concat . unzip) $ concatM [
         forM parsedHasField $
           uncurry (solveHasField rn)
-      , forM parsedConstraintsRecord $
-          uncurry (solveConstraintsRecord rn)
+      , forM parsedRecordConstraints $
+          uncurry (solveRecordConstraints rn)
       ]
     return $ TcPluginOk solved new
   where
     parsedHasField          :: [(Ct, GenLocated CtLoc CHasField)]
-    parsedConstraintsRecord :: [(Ct, GenLocated CtLoc CConstraintsRecord)]
+    parsedRecordConstraints :: [(Ct, GenLocated CtLoc CRecordConstraints)]
+    parsedRecordMetadata    :: [(Ct, GenLocated CtLoc CRecordMetadata)]
 
     parsedHasField =
         parseAll' (withOrig (parseHasField rn)) wanted
-    parsedConstraintsRecord =
-        parseAll' (withOrig (parseConstraintsRecord rn)) wanted
+    parsedRecordConstraints =
+        parseAll' (withOrig (parseRecordConstraints rn)) wanted
+    parsedRecordMetadata =
+        parseAll' (withOrig (parseRecordMetadata rn)) wanted
 
     _debugOutput :: String
     _debugOutput = unlines [
           "*** solve"
-        , "given:                  " ++ showSDocUnsafe (ppr given)
-        , "wanted:                 " ++ showSDocUnsafe (ppr wanted)
-        , "parsedHasField:         " ++ showSDocUnsafe (ppr parsedHasField)
-        , "parsedContraintsRecord: " ++ showSDocUnsafe (ppr parsedConstraintsRecord)
+        , concat [
+              "given:"
+            , showSDocUnsafe (ppr given)
+            ]
+        , concat [
+              "wanted: "
+            , showSDocUnsafe (ppr wanted)
+            ]
+        , concat [
+              "parsedHasField: "
+            , showSDocUnsafe (ppr parsedHasField)
+            ]
+        , concat [
+              "parsedRecordConstraints: "
+            , showSDocUnsafe (ppr parsedRecordConstraints)
+            ]
+        , concat [
+              "parsedRecordMetadata: "
+            , showSDocUnsafe (ppr parsedRecordMetadata)
+            ]
         ]
 
 {-------------------------------------------------------------------------------
@@ -71,17 +90,17 @@ solveHasField rn orig (L l hf@CHasField{..}) =
           )
 
 {-------------------------------------------------------------------------------
-  ConstraintsRecord
+  RecordConstraints
 -------------------------------------------------------------------------------}
 
-solveConstraintsRecord ::
+solveRecordConstraints ::
      ResolvedNames
   -> Ct
-  -> GenLocated CtLoc CConstraintsRecord
+  -> GenLocated CtLoc CRecordConstraints
   -> TcPluginM 'Solve (Maybe (EvTerm, Ct), [Ct])
-solveConstraintsRecord rn@ResolvedNames{..}
+solveRecordConstraints rn@ResolvedNames{..}
                        orig
-                       (L l cr@CConstraintsRecord{..})
+                       (L l cr@CRecordConstraints{..})
                      = do
     -- The call to 'allFieldsKnown' establishes two things:
     --
@@ -91,13 +110,13 @@ solveConstraintsRecord rn@ResolvedNames{..}
     --   and the order is determined by the field names (see also the 'Generic'
     --   instance for 'Record'). The 'Map' constructed by 'allFieldsKnown'
     --   gives us this ordering.
-    case allFieldsKnown constraintsRecordFields of
+    case allFieldsKnown recordConstraintsFields of
       Nothing ->
         return (Nothing, [])
       Just fields -> do
         cs <- forM (Map.elems fields) $ \fieldType -> newWanted' l $
                 mkClassPred clsShow [fieldType]
-        ev <- evidenceConstraintsRecord
+        ev <- evidenceRecordConstraints
                 rn
                 (zipWith ((,) . getEvVar) cs (Map.elems fields))
                 cr

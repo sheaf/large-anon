@@ -11,6 +11,11 @@ module Data.Record.Anonymous (
     -- * Additional convenience functions
   , get
   , set
+    -- * Generics
+  , RecordConstraints(..)
+  , RecordMetadata(..)
+    -- ** Generic functions
+  , gshowRecord
     -- ** Re-exports
   , HasField(..)
   ) where

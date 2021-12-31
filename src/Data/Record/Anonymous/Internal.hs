@@ -17,7 +17,10 @@ module Data.Record.Anonymous.Internal (
     -- * User-visible API
   , empty
   , insert
-    -- * Generic functions
+    -- * Generics
+  , RecordConstraints(..)
+  , RecordMetadata(..)
+    -- ** Generic functions
   , gshowRecord
     -- * Internal API
   , unsafeRecordHasField
@@ -75,14 +78,18 @@ insert (Field l) a (MkR r) = MkR $ Map.insert (symbolVal l) (unsafeCoerce a) r
   Generics
 -------------------------------------------------------------------------------}
 
-class ConstraintsRecord (r :: [(Symbol, Type)]) (c :: Type -> Constraint) where
+class RecordConstraints (r :: [(Symbol, Type)]) (c :: Type -> Constraint) where
   dictRecord :: Proxy c -> Rep (Dict c) (Record r)
 
-instance Generic (Record r) where
-  type Constraints (Record r) = ConstraintsRecord r
+class RecordMetadata (r :: [(Symbol, Type)]) where
+  recordMetadata :: Metadata (Record r)
+
+instance RecordMetadata r => Generic (Record r) where
+  type Constraints (Record r) = RecordConstraints r
   type MetadataOf  (Record r) = r
 
-  dict = dictRecord
+  dict       = dictRecord
+  metadata _ = recordMetadata
 
   from :: Record r -> Rep I (Record r)
   from (MkR r) = Rep.unsafeFromListAny (aux $ Map.elems r)
@@ -93,15 +100,17 @@ instance Generic (Record r) where
   to :: Rep I (Record r) -> Record r
   to = error "to: not yet defined (we need to reconstruct the field names)"
 
-  metadata = error "metadata not yet supported"
-
 {-------------------------------------------------------------------------------
   Instances
 
   These depend on generics.
+
+  TODO: Should RecordMetadata be a superclass of RecordConstraints?
 -------------------------------------------------------------------------------}
 
-gshowRecord :: ConstraintsRecord r Show => Record r -> String
+gshowRecord ::
+     (RecordMetadata r, RecordConstraints r Show)
+  => Record r -> String
 gshowRecord = combine . Rep.collapse . Rep.cmap (Proxy @Show) aux . from
   where
     aux :: Show x => I x -> K String x
@@ -138,7 +147,7 @@ unsafeRecordHasField label (MkR r) = (
         , " not found"
         ]
 
--- | Suitable implementation for a plugin-derived 'ConstraintsRecord' instance
+-- | Suitable implementation for a plugin-derived 'RecordConstraints' instance
 --
 -- Precondition: the input list of dictionaries must be correctly constructed
 -- (this is ensured by the plugin).

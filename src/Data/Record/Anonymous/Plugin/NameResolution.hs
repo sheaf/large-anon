@@ -8,16 +8,20 @@ module Data.Record.Anonymous.Plugin.NameResolution (
 
 import Data.Record.Anonymous.Plugin.GhcTcPluginAPI
 
+-- | Names we need to parse constraints or generate core
+--
+-- Listed alphabetically.
 data ResolvedNames = ResolvedNames {
       clsHasField            :: Class
-    , clsConstraintsRecord   :: Class
+    , clsRecordConstraints   :: Class
+    , clsRecordMetadata      :: Class
     , clsShow                :: Class
-    , tyConRecord            :: TyCon
-    , tyConDict              :: TyCon
     , dataConDict            :: DataCon
-    , idUnsafeRecordHasField :: Id
-    , idUnsafeDictRecord     :: Id
     , idUnsafeCoerce         :: Id
+    , idUnsafeDictRecord     :: Id
+    , idUnsafeRecordHasField :: Id
+    , tyConDict              :: TyCon
+    , tyConRecord            :: TyCon
     }
 
 nameResolution :: TcPluginM 'Init ResolvedNames
@@ -34,25 +38,27 @@ nameResolution = do
 
     clsHasField <-
       getClass ghcRecordsCompat "HasField"
-    clsConstraintsRecord <-
-      getClass dataRecordAnonymousInternal "ConstraintsRecord"
+    clsRecordConstraints <-
+      getClass dataRecordAnonymousInternal "RecordConstraints"
+    clsRecordMetadata <-
+      getClass dataRecordAnonymousInternal "RecordMetadata"
     clsShow <-
       tcLookupClass showClassName
-
-    tyConRecord <-
-      getTyCon dataRecordAnonymousInternal "Record"
-    tyConDict <-
-      getTyCon dataSOPDict "Dict"
 
     dataConDict <-
       getDataCon dataSOPDict "Dict"
 
+    idUnsafeCoerce <-
+      getVar unsafeCoerce "unsafeCoerce"
     idUnsafeRecordHasField <-
       getVar dataRecordAnonymousInternal "unsafeRecordHasField"
     idUnsafeDictRecord <-
       getVar dataRecordAnonymousInternal "unsafeDictRecord"
-    idUnsafeCoerce <-
-      getVar unsafeCoerce "unsafeCoerce"
+
+    tyConDict <-
+      getTyCon dataSOPDict "Dict"
+    tyConRecord <-
+      getTyCon dataRecordAnonymousInternal "Record"
 
     return $ ResolvedNames {..}
 
