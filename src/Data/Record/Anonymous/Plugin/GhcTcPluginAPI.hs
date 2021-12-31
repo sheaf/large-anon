@@ -12,14 +12,16 @@ module Data.Record.Anonymous.Plugin.GhcTcPluginAPI (
   , module GHC.Core.Make
 
     -- * Additional re-exports
-    -- ** Parsing types
+
+    -- ** Parsing and constructing types
   , tyConAppTyCon_maybe
   , splitAppTy_maybe
   , isStrLitTy
   , Boxity(Boxed)
+  , mkStrLitTy
+
     -- ** Names
   , showClassName
-  , typeTyConName
 
     -- * New shims
   , newWanted'
@@ -31,11 +33,10 @@ import GHC.TcPlugin.API.Internal (unsafeLiftTcM)
 import GHC.Utils.Outputable
 import GHC.Core.Make
 
-import Type (tyConAppTyCon_maybe, splitAppTy_maybe, isStrLitTy)
 import BasicTypes (Boxity(Boxed))
 import GhcPlugins (MonadThings(lookupThing), CoreExpr, unsafeGlobalDynFlags)
 import PrelNames (showClassName)
-import THNames (typeTyConName)
+import Type (tyConAppTyCon_maybe, splitAppTy_maybe, isStrLitTy, mkStrLitTy)
 
 instance ( Monad (TcPluginM s)
          , MonadTcPlugin (TcPluginM s)

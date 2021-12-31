@@ -18,7 +18,7 @@ tests = testGroup "Test.Record.Anonymous.Sanity" [
     , testCase "Show"     test_Show
     ]
 
--- 1
+-- 3
 
 {-------------------------------------------------------------------------------
   HasField

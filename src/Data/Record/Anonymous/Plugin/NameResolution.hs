@@ -7,66 +7,61 @@ module Data.Record.Anonymous.Plugin.NameResolution (
   ) where
 
 import Data.Record.Anonymous.Plugin.GhcTcPluginAPI
+import PrelNames (knownSymbolClassName)
 
 -- | Names we need to parse constraints or generate core
 --
 -- Listed alphabetically.
 data ResolvedNames = ResolvedNames {
       clsHasField            :: Class
+    , clsKnownSymbol         :: Class
     , clsRecordConstraints   :: Class
     , clsRecordMetadata      :: Class
     , clsShow                :: Class
     , dataConDict            :: DataCon
+    , dataConFieldLazy       :: DataCon
+    , dataConFieldMetadata   :: DataCon
     , dataConMetadata        :: DataCon
+    , dataConProxy           :: DataCon
     , idUnsafeCoerce         :: Id
     , idUnsafeDictRecord     :: Id
     , idUnsafeFieldMetadata  :: Id
     , idUnsafeRecordHasField :: Id
     , tyConDict              :: TyCon
+    , tyConFieldMetadata     :: TyCon
     , tyConRecord            :: TyCon
     }
 
 nameResolution :: TcPluginM 'Init ResolvedNames
 nameResolution = do
 
-    dataRecordAnonymousInternal <-
-      getModule "large-anon" "Data.Record.Anonymous.Internal"
-    dataRecordGeneric <-
-      getModule "large-records" "Data.Record.Generic"
-    dataSOPDict <-
-      getModule "sop-core" "Data.SOP.Dict"
-    ghcRecordsCompat <-
-      getModule "record-hasfield" "GHC.Records.Compat"
-    unsafeCoerce <-
-      getModule "base" "Unsafe.Coerce"
+    dp   <- getModule "base"            "Data.Proxy"
+    drai <- getModule "large-anon"      "Data.Record.Anonymous.Internal"
+    drg  <- getModule "large-records"   "Data.Record.Generic"
+    dsd  <- getModule "sop-core"        "Data.SOP.Dict"
+    grc  <- getModule "record-hasfield" "GHC.Records.Compat"
+    uc   <- getModule "base"            "Unsafe.Coerce"
 
-    clsHasField <-
-      getClass ghcRecordsCompat "HasField"
-    clsRecordConstraints <-
-      getClass dataRecordAnonymousInternal "RecordConstraints"
-    clsRecordMetadata <-
-      getClass dataRecordAnonymousInternal "RecordMetadata"
-    clsShow <-
-      tcLookupClass showClassName
+    clsHasField          <- getClass grc  "HasField"
+    clsKnownSymbol       <- tcLookupClass knownSymbolClassName
+    clsRecordConstraints <- getClass drai "RecordConstraints"
+    clsRecordMetadata    <- getClass drai "RecordMetadata"
+    clsShow              <- tcLookupClass showClassName
 
-    dataConDict <-
-      getDataCon dataSOPDict "Dict"
-    dataConMetadata <-
-      getDataCon dataRecordGeneric "Metadata"
+    dataConDict          <- getDataCon dsd "Dict"
+    dataConFieldMetadata <- getDataCon drg "FieldMetadata"
+    dataConFieldLazy     <- getDataCon drg "FieldLazy"
+    dataConMetadata      <- getDataCon drg "Metadata"
+    dataConProxy         <- getDataCon dp  "Proxy"
 
-    idUnsafeCoerce <-
-      getVar unsafeCoerce "unsafeCoerce"
-    idUnsafeFieldMetadata <-
-      getVar dataRecordAnonymousInternal "unsafeFieldMetadata"
-    idUnsafeRecordHasField <-
-      getVar dataRecordAnonymousInternal "unsafeRecordHasField"
-    idUnsafeDictRecord <-
-      getVar dataRecordAnonymousInternal "unsafeDictRecord"
+    idUnsafeCoerce         <- getVar uc   "unsafeCoerce"
+    idUnsafeFieldMetadata  <- getVar drai "unsafeFieldMetadata"
+    idUnsafeRecordHasField <- getVar drai "unsafeRecordHasField"
+    idUnsafeDictRecord     <- getVar drai "unsafeDictRecord"
 
-    tyConDict <-
-      getTyCon dataSOPDict "Dict"
-    tyConRecord <-
-      getTyCon dataRecordAnonymousInternal "Record"
+    tyConDict          <- getTyCon dsd  "Dict"
+    tyConFieldMetadata <- getTyCon drg  "FieldMetadata"
+    tyConRecord        <- getTyCon drai "Record"
 
     return $ ResolvedNames {..}
 

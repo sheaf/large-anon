@@ -1,5 +1,6 @@
 {-# LANGUAGE DataKinds       #-}
 {-# LANGUAGE LambdaCase      #-}
+{-# LANGUAGE NamedFieldPuns  #-}
 {-# LANGUAGE RecordWildCards #-}
 
 module Data.Record.Anonymous.Plugin.Constraints.RecordMetadata (
@@ -9,6 +10,8 @@ module Data.Record.Anonymous.Plugin.Constraints.RecordMetadata (
   , solveRecordMetadata
   ) where
 
+import Data.Foldable (toList)
+import Data.Traversable (for)
 import Data.Void
 
 import qualified Data.Map as Map
@@ -67,14 +70,18 @@ parseRecordMetadata ResolvedNames{..} =
   Evidence
 -------------------------------------------------------------------------------}
 
+-- | Construct evidence
+--
+-- For each field we need an evidence variable corresponding to the evidence
+-- that that field name satisfies KnownSymbol.
 evidenceRecordMetadata ::
      ResolvedNames
   -> CRecordMetadata
-  -> KnownRecord (KnownField ())
+  -> KnownRecord (KnownField EvVar)
   -> TcPluginM 'Solve EvTerm
 evidenceRecordMetadata ResolvedNames{..}
                        CRecordMetadata{..}
-                       KnownRecord{..}
+                       fields@KnownRecord{..}
                      = do
     nameRecord <- mkStringExpr "Record"
     nameConstr <- mkStringExpr "Record"
@@ -89,9 +96,34 @@ evidenceRecordMetadata ResolvedNames{..}
             , mkUncheckedIntExpr (fromIntegral (Map.size knownFields))
             , mkCoreApps (Var idUnsafeFieldMetadata) [
                   Type recordMetadataTypeRecord
+                , mkListExpr fieldMetadataType $
+                    map mkFieldInfoAny (orderKnownFields fields)
                 ]
             ]
         ]
+  where
+    fieldMetadataType :: Type
+    fieldMetadataType = mkTyConApp tyConFieldMetadata [anyType]
+
+    mkFieldInfoAny :: KnownField EvVar -> EvExpr
+    mkFieldInfoAny KnownField{ knownFieldName = fieldName
+                             , knownFieldInfo = dict
+                             } =
+        mkCoreConApps dataConFieldMetadata [
+            Type anyType
+          , Type (mkStrLitTy fieldName)
+          , Var dict
+          , mkCoreConApps dataConProxy [
+                Type $ mkTyConTy typeSymbolKindCon
+              , Type $ mkStrLitTy fieldName
+              ]
+            -- TODO: Think about strict/lazy fields
+          , mkCoreConApps dataConFieldLazy []
+          ]
+
+    -- Any at kind Type
+    anyType :: Type
+    anyType = mkTyConApp anyTyCon [liftedTypeKind]
 
 {-------------------------------------------------------------------------------
   Solver
@@ -104,12 +136,24 @@ solveRecordMetadata ::
   -> TcPluginM 'Solve (Maybe (EvTerm, Ct), [Ct])
 solveRecordMetadata rn@ResolvedNames{..}
                        orig
-                       (L _l cm@CRecordMetadata{..})
+                       (L l cm@CRecordMetadata{..})
                      = do
     -- See 'solveRecordConstraints' for a discussion of 'allFieldsKnown'
     case allFieldsKnown recordMetadataFields of
       Nothing ->
         return (Nothing, [])
       Just fields -> do
-        ev <- evidenceRecordMetadata rn cm fields
-        return (Just (ev, orig), [])
+        fields' <- for fields $ \field@KnownField{knownFieldName} -> do
+          ev <- newWanted' l $
+                  mkClassPred clsKnownSymbol [mkStrLitTy knownFieldName]
+          return $ const ev <$> field
+        ev <- evidenceRecordMetadata rn cm $ fmap getEvVar <$> fields'
+        return (
+            Just (ev, orig)
+          , map (mkNonCanonical . knownFieldInfo) (toList fields')
+          )
+  where
+    getEvVar :: CtEvidence -> EvVar
+    getEvVar ct = case ctev_dest ct of
+      EvVarDest var -> var
+      HoleDest  _   -> error "impossible (we don't ask for primitive equality)"

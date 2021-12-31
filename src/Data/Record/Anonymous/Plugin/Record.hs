@@ -70,7 +70,8 @@ data KnownRecord a = KnownRecord {
   deriving (Functor, Foldable, Traversable)
 
 data KnownField a = KnownField {
-      knownFieldType :: Type
+      knownFieldName :: FastString -- repeated here for convenience
+    , knownFieldType :: Type
     , knownFieldInfo :: a
     }
   deriving (Functor)
@@ -92,11 +93,12 @@ allFieldsKnown = go Map.empty
         FieldsCons f fs ->
           case f of
             FieldKnown nm typ ->
-              go (Map.insert nm (knownField typ) acc) fs
+              go (Map.insert nm (knownField nm typ) acc) fs
 
-    knownField :: Type -> KnownField ()
-    knownField typ = KnownField {
-          knownFieldType = typ
+    knownField :: FastString -> Type -> KnownField ()
+    knownField nm typ = KnownField {
+          knownFieldName = nm
+        , knownFieldType = typ
         , knownFieldInfo = ()
         }
 

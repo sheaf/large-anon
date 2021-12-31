@@ -74,6 +74,10 @@ parseRecordConstraints ResolvedNames{..} =
   Evidence
 -------------------------------------------------------------------------------}
 
+-- | Construct evidence
+--
+-- For each field we need an evidence variable corresponding to the evidence
+-- that that fields satisfies the constraint.
 evidenceRecordConstraints ::
      ResolvedNames
   -> CRecordConstraints
@@ -87,7 +91,8 @@ evidenceRecordConstraints ResolvedNames{..} CRecordConstraints{..} fields = do
         [ mkCoreApps (Var idUnsafeDictRecord) [
               Type recordConstraintsTypeRecord
             , Type recordConstraintsTypeConstraint
-            , mkListExpr dictType (map mkDictAny (orderKnownFields fields))
+            , mkListExpr dictType $
+                map mkDictAny (orderKnownFields fields)
             ]
         ]
   where
@@ -99,7 +104,9 @@ evidenceRecordConstraints ResolvedNames{..} CRecordConstraints{..} fields = do
         ]
 
     mkDictAny :: KnownField EvVar -> EvExpr
-    mkDictAny KnownField{knownFieldType = fieldType, knownFieldInfo = dict} =
+    mkDictAny KnownField{ knownFieldType = fieldType
+                        , knownFieldInfo = dict
+                        } =
         mkCoreConApps dataConDict [
             Type liftedTypeKind
           , Type recordConstraintsTypeConstraint

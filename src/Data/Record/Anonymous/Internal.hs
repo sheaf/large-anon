@@ -156,5 +156,7 @@ unsafeDictRecord :: forall r c.
 unsafeDictRecord ds _ = Rep.unsafeFromListAny ds
 
 -- | Used by the plugin during evidence construction for 'RecordMetadata'
-unsafeFieldMetadata :: forall r. Rep FieldMetadata (Record r)
-unsafeFieldMetadata = undefined
+unsafeFieldMetadata :: forall r.
+     [FieldMetadata Any]
+  -> Rep FieldMetadata (Record r)
+unsafeFieldMetadata = Rep.unsafeFromListAny
