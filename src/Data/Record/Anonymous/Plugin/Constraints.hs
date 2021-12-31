@@ -1,5 +1,7 @@
 {-# LANGUAGE DataKinds           #-}
 {-# LANGUAGE DeriveFunctor       #-}
+{-# LANGUAGE DeriveFoldable      #-}
+{-# LANGUAGE DeriveTraversable   #-}
 {-# LANGUAGE LambdaCase          #-}
 {-# LANGUAGE NamedFieldPuns      #-}
 {-# LANGUAGE RecordWildCards     #-}
@@ -17,6 +19,9 @@ module Data.Record.Anonymous.Plugin.Constraints (
   , Fields(..)
   , Field(..)
   , findField
+    -- ** Records of statically known shape
+  , KnownRecord(..)
+  , KnownField(..)
   , allFieldsKnown
     -- * Parsing
     -- ** Infrastructure
@@ -116,22 +121,57 @@ findField nm = go
       | otherwise = go fs
     go FieldsNil = Nothing
 
+{-------------------------------------------------------------------------------
+  Records of statically known shape
+
+  TODO: Move this to a module of its own (along with the basic definitions),
+  and split the different kinds of constraints to modules of their own.
+-------------------------------------------------------------------------------}
+
+data KnownRecord a = KnownRecord {
+      knownFields :: Map FastString a
+    }
+  deriving (Functor, Foldable, Traversable)
+
+data KnownField a = KnownField {
+      knownFieldType :: Type
+    , knownFieldInfo :: a
+    }
+  deriving (Functor)
+
 -- | Return map from field name to type, /if/ all fields are statically known
 --
 -- TODO: For our current 'Fields' definition, this will /always/ be the case,
 -- but if we extend the parser to deal with field name variables or list
 -- variables, this will no longer be the case.
-allFieldsKnown :: Fields -> Maybe (Map FastString Type)
+allFieldsKnown :: Fields -> Maybe (KnownRecord (KnownField ()))
 allFieldsKnown = go Map.empty
   where
-    go :: Map FastString Type -> Fields -> Maybe (Map FastString Type)
+    go :: Map FastString (KnownField ()) -> Fields -> Maybe (KnownRecord (KnownField ()))
     go acc = \case
         FieldsNil ->
-          Just acc
+          Just KnownRecord {
+              knownFields = acc
+            }
         FieldsCons f fs ->
           case f of
             FieldKnown nm typ ->
-              go (Map.insert nm typ acc) fs
+              go (Map.insert nm (knownField typ) acc) fs
+
+    knownField :: Type -> KnownField ()
+    knownField typ = KnownField {
+          knownFieldType = typ
+        , knownFieldInfo = ()
+        }
+
+-- | List all known-fields in order
+--
+-- The order here is determined by the alphabetical order as returned by
+-- 'Map.elems' and friends. It is critical that this matches the order of the
+-- fields in the vector assumed by the 'from' and 'to' methods of the
+-- 'Generic' class instance.
+orderKnownFields :: KnownRecord a -> [a]
+orderKnownFields KnownRecord{knownFields} = Map.elems knownFields
 
 {-------------------------------------------------------------------------------
   Outputable
@@ -395,15 +435,12 @@ evidenceHasField ResolvedNames{..} CHasField{..} = do
         ]
 
 -- | Construct evidence for 'RecordConstraints'
---
--- The evidence for the fields must be specified in the right order
--- (see 'Generic' instance for 'Record').
 evidenceRecordConstraints ::
      ResolvedNames
-  -> [(EvVar, Type)]  -- Evidence for and type of each field of the record
   -> CRecordConstraints
+  -> KnownRecord (KnownField EvVar)
   -> TcPluginM 'Solve EvTerm
-evidenceRecordConstraints ResolvedNames{..} cs CRecordConstraints{..} = do
+evidenceRecordConstraints ResolvedNames{..} CRecordConstraints{..} fields = do
     return $
       evDataConApp
         (classDataCon clsRecordConstraints)
@@ -411,7 +448,7 @@ evidenceRecordConstraints ResolvedNames{..} cs CRecordConstraints{..} = do
         [ mkCoreApps (Var idUnsafeDictRecord) [
               Type recordConstraintsTypeRecord
             , Type recordConstraintsTypeConstraint
-            , mkListExpr dictType (map (uncurry mkDictAny) cs)
+            , mkListExpr dictType (map mkDictAny (orderKnownFields fields))
             ]
         ]
   where
@@ -422,17 +459,18 @@ evidenceRecordConstraints ResolvedNames{..} cs CRecordConstraints{..} = do
         , anyType
         ]
 
-    mkDictAny :: EvVar -> Type -> EvExpr
-    mkDictAny dict fieldType = mkCoreConApps dataConDict [
-          Type liftedTypeKind
-        , Type recordConstraintsTypeConstraint
-        , Type anyType
-        , mkCoreApps (Var idUnsafeCoerce) [
-              Type $ mkAppTy recordConstraintsTypeConstraint fieldType
-            , Type $ mkAppTy recordConstraintsTypeConstraint anyType
-            , Var dict
-            ]
-        ]
+    mkDictAny :: KnownField EvVar -> EvExpr
+    mkDictAny KnownField{knownFieldType = fieldType, knownFieldInfo = dict} =
+        mkCoreConApps dataConDict [
+            Type liftedTypeKind
+          , Type recordConstraintsTypeConstraint
+          , Type anyType
+          , mkCoreApps (Var idUnsafeCoerce) [
+                Type $ mkAppTy recordConstraintsTypeConstraint fieldType
+              , Type $ mkAppTy recordConstraintsTypeConstraint anyType
+              , Var dict
+              ]
+          ]
 
     -- Any at kind Type
     anyType :: Type
@@ -443,5 +481,5 @@ evidenceRecordMetadata ::
      ResolvedNames
   -> Fields
   -> TcPluginM 'Solve EvTerm
-evidenceRecordMetadata ResolvedNames{..} fields =
+evidenceRecordMetadata ResolvedNames{..} _fields =
     undefined

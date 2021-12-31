@@ -7,14 +7,13 @@ module Data.Record.Anonymous.Plugin.Solver (
 
 import Data.Bifunctor
 import Data.Maybe (catMaybes)
-import Data.Traversable (forM)
-
-import qualified Data.Map as Map
+import Data.Traversable (forM, for)
 
 import Data.Record.Anonymous.Plugin.Constraints
 import Data.Record.Anonymous.Plugin.GhcTcPluginAPI
 import Data.Record.Anonymous.Plugin.NameResolution
 import Data.Record.Internal.Util (concatM)
+import Data.Foldable (toList)
 
 {-------------------------------------------------------------------------------
   Top-level solver
@@ -110,13 +109,19 @@ solveRecordConstraints rn@ResolvedNames{..}
       Nothing ->
         return (Nothing, [])
       Just fields -> do
-        cs <- forM (Map.elems fields) $ \fieldType -> newWanted' l $
-                mkClassPred clsShow [fieldType]
-        ev <- evidenceRecordConstraints
-                rn
-                (zipWith ((,) . getEvVar) cs (Map.elems fields))
-                cr
-        return (Just (ev, orig), map mkNonCanonical cs)
+        fields' <- for fields $ \field -> do
+          ev <- newWanted' l $
+                  mkClassPred
+                    -- TODO: should be recordConstraintsTypeConstraint
+                    -- (but then we need to parse more carefully)
+                    clsShow
+                    [knownFieldType field]
+          return $ const ev <$> field
+        ev <- evidenceRecordConstraints rn cr $ fmap getEvVar <$> fields'
+        return (
+            Just (ev, orig)
+          , map (mkNonCanonical . knownFieldInfo) (toList fields')
+          )
   where
     getEvVar :: CtEvidence -> EvVar
     getEvVar ct = case ctev_dest ct of
@@ -136,6 +141,8 @@ solveRecordMetadata rn@ResolvedNames{..}
                        orig
                        (L _l CRecordMetadata{..})
                      = do
+    return (Nothing, [])
+{-
     -- See 'solveRecordConstraints' for a discussion of 'allFieldsKnown'
     case allFieldsKnown recordMetadataFields of
       Nothing ->
@@ -143,6 +150,7 @@ solveRecordMetadata rn@ResolvedNames{..}
       Just _fields -> do
         ev <- evidenceRecordMetadata rn recordMetadataFields
         return (Just (ev, orig), [])
+-}
 
 {-------------------------------------------------------------------------------
   Auxiliary
