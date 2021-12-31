@@ -136,7 +136,7 @@ solveRecordConstraints ::
   -> Ct
   -> GenLocated CtLoc CRecordConstraints
   -> TcPluginM 'Solve (Maybe (EvTerm, Ct), [Ct])
-solveRecordConstraints rn@ResolvedNames{..}
+solveRecordConstraints rn
                        orig
                        (L l cr@CRecordConstraints{..})
                      = do

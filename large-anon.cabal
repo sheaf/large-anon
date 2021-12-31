@@ -31,9 +31,9 @@ library
   other-extensions:
   build-depends:
       -- TODO: Bounds
-      base             >= 4.13  && < 4.14
+      base             >= 4.13  && < 4.18
     , containers
-    , ghc-tcplugin-api >= 0.6.1
+    , ghc-tcplugin-api >= 0.7
     , record-hasfield
     , sop-core
     , text

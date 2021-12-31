@@ -7,7 +7,6 @@ module Data.Record.Anonymous.Plugin.NameResolution (
   ) where
 
 import Data.Record.Anonymous.Plugin.GhcTcPluginAPI
-import PrelNames (knownSymbolClassName)
 
 -- | Names we need to parse constraints or generate core
 --
@@ -17,7 +16,6 @@ data ResolvedNames = ResolvedNames {
     , clsKnownSymbol         :: Class
     , clsRecordConstraints   :: Class
     , clsRecordMetadata      :: Class
-    , clsShow                :: Class
     , dataConDict            :: DataCon
     , dataConFieldLazy       :: DataCon
     , dataConFieldMetadata   :: DataCon
@@ -46,7 +44,6 @@ nameResolution = do
     clsKnownSymbol       <- tcLookupClass knownSymbolClassName
     clsRecordConstraints <- getClass drai "RecordConstraints"
     clsRecordMetadata    <- getClass drai "RecordMetadata"
-    clsShow              <- tcLookupClass showClassName
 
     dataConDict          <- getDataCon dsd "Dict"
     dataConFieldMetadata <- getDataCon drg "FieldMetadata"
