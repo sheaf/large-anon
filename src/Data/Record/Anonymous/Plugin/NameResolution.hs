@@ -17,8 +17,10 @@ data ResolvedNames = ResolvedNames {
     , clsRecordMetadata      :: Class
     , clsShow                :: Class
     , dataConDict            :: DataCon
+    , dataConMetadata        :: DataCon
     , idUnsafeCoerce         :: Id
     , idUnsafeDictRecord     :: Id
+    , idUnsafeFieldMetadata  :: Id
     , idUnsafeRecordHasField :: Id
     , tyConDict              :: TyCon
     , tyConRecord            :: TyCon
@@ -27,12 +29,14 @@ data ResolvedNames = ResolvedNames {
 nameResolution :: TcPluginM 'Init ResolvedNames
 nameResolution = do
 
-    ghcRecordsCompat <-
-      getModule "record-hasfield" "GHC.Records.Compat"
     dataRecordAnonymousInternal <-
       getModule "large-anon" "Data.Record.Anonymous.Internal"
+    dataRecordGeneric <-
+      getModule "large-records" "Data.Record.Generic"
     dataSOPDict <-
       getModule "sop-core" "Data.SOP.Dict"
+    ghcRecordsCompat <-
+      getModule "record-hasfield" "GHC.Records.Compat"
     unsafeCoerce <-
       getModule "base" "Unsafe.Coerce"
 
@@ -47,9 +51,13 @@ nameResolution = do
 
     dataConDict <-
       getDataCon dataSOPDict "Dict"
+    dataConMetadata <-
+      getDataCon dataRecordGeneric "Metadata"
 
     idUnsafeCoerce <-
       getVar unsafeCoerce "unsafeCoerce"
+    idUnsafeFieldMetadata <-
+      getVar dataRecordAnonymousInternal "unsafeFieldMetadata"
     idUnsafeRecordHasField <-
       getVar dataRecordAnonymousInternal "unsafeRecordHasField"
     idUnsafeDictRecord <-

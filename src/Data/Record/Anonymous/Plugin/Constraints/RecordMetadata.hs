@@ -11,6 +11,8 @@ module Data.Record.Anonymous.Plugin.Constraints.RecordMetadata (
 
 import Data.Void
 
+import qualified Data.Map as Map
+
 import Data.Record.Anonymous.Plugin.GhcTcPluginAPI
 import Data.Record.Anonymous.Plugin.NameResolution
 import Data.Record.Anonymous.Plugin.Parsing
@@ -67,10 +69,29 @@ parseRecordMetadata ResolvedNames{..} =
 
 evidenceRecordMetadata ::
      ResolvedNames
-  -> Fields
+  -> CRecordMetadata
+  -> KnownRecord (KnownField ())
   -> TcPluginM 'Solve EvTerm
-evidenceRecordMetadata ResolvedNames{..} _fields =
-    undefined
+evidenceRecordMetadata ResolvedNames{..}
+                       CRecordMetadata{..}
+                       KnownRecord{..}
+                     = do
+    nameRecord <- mkStringExpr "Record"
+    nameConstr <- mkStringExpr "Record"
+    return $
+      evDataConApp
+        (classDataCon clsRecordMetadata)
+        [recordMetadataTypeRecord]
+        [ mkCoreConApps dataConMetadata [
+              Type $ mkTyConApp tyConRecord [recordMetadataTypeRecord]
+            , nameRecord
+            , nameConstr
+            , mkUncheckedIntExpr (fromIntegral (Map.size knownFields))
+            , mkCoreApps (Var idUnsafeFieldMetadata) [
+                  Type recordMetadataTypeRecord
+                ]
+            ]
+        ]
 
 {-------------------------------------------------------------------------------
   Solver
@@ -83,16 +104,12 @@ solveRecordMetadata ::
   -> TcPluginM 'Solve (Maybe (EvTerm, Ct), [Ct])
 solveRecordMetadata rn@ResolvedNames{..}
                        orig
-                       (L _l CRecordMetadata{..})
+                       (L _l cm@CRecordMetadata{..})
                      = do
-    return (Nothing, [])
-{-
     -- See 'solveRecordConstraints' for a discussion of 'allFieldsKnown'
     case allFieldsKnown recordMetadataFields of
       Nothing ->
         return (Nothing, [])
-      Just _fields -> do
-        ev <- evidenceRecordMetadata rn recordMetadataFields
+      Just fields -> do
+        ev <- evidenceRecordMetadata rn cm fields
         return (Just (ev, orig), [])
--}
-

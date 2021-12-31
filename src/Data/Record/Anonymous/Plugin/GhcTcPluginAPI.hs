@@ -21,8 +21,9 @@ module Data.Record.Anonymous.Plugin.GhcTcPluginAPI (
   , showClassName
   , typeTyConName
 
-    -- * Bug work-arounds
+    -- * New shims
   , newWanted'
+  , mkUncheckedIntExpr
   ) where
 
 import GHC.TcPlugin.API
@@ -32,7 +33,7 @@ import GHC.Core.Make
 
 import Type (tyConAppTyCon_maybe, splitAppTy_maybe, isStrLitTy)
 import BasicTypes (Boxity(Boxed))
-import GhcPlugins (MonadThings(lookupThing))
+import GhcPlugins (MonadThings(lookupThing), CoreExpr, unsafeGlobalDynFlags)
 import PrelNames (showClassName)
 import THNames (typeTyConName)
 
@@ -54,4 +55,6 @@ instance Outputable CtLoc where
 newWanted' :: CtLoc -> PredType -> TcPluginM 'Solve CtEvidence
 newWanted' l w = setCtLocM l $ newWanted l w
 
+mkUncheckedIntExpr :: Integer -> CoreExpr
+mkUncheckedIntExpr = mkIntExpr unsafeGlobalDynFlags
 

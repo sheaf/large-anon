@@ -25,6 +25,7 @@ module Data.Record.Anonymous.Internal (
     -- * Internal API
   , unsafeRecordHasField
   , unsafeDictRecord
+  , unsafeFieldMetadata
   ) where
 
 import Data.Coerce (coerce)
@@ -127,11 +128,11 @@ gshowRecord = combine . Rep.collapse . Rep.cmap (Proxy @Show) aux . from
   Internal API
 -------------------------------------------------------------------------------}
 
--- | Suitable implementation for a plugin-derived 'HasField' instance
+-- | Used by the plugin during evidence construction for 'HasField'
 --
 -- Precondition: the record must have the specified field with type @a@
 -- (this precondition is verified by the plugin before generating "evidence"
--- that uses this function)
+-- that uses this function).
 unsafeRecordHasField :: forall r a. String -> Record r -> (a -> Record r, a)
 unsafeRecordHasField label (MkR r) = (
       \a -> MkR $ Map.insert label (unsafeCoerce a) r
@@ -147,12 +148,13 @@ unsafeRecordHasField label (MkR r) = (
         , " not found"
         ]
 
--- | Suitable implementation for a plugin-derived 'RecordConstraints' instance
---
--- Precondition: the input list of dictionaries must be correctly constructed
--- (this is ensured by the plugin).
+-- | Used by the plugin during evidence construction for 'RecordConstraints'
 unsafeDictRecord :: forall r c.
      [Dict c Any]  -- ^ Dictionary for each field, in order
   -> Proxy c
   -> Rep (Dict c) (Record r)
 unsafeDictRecord ds _ = Rep.unsafeFromListAny ds
+
+-- | Used by the plugin during evidence construction for 'RecordMetadata'
+unsafeFieldMetadata :: forall r. Rep FieldMetadata (Record r)
+unsafeFieldMetadata = undefined
