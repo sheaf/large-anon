@@ -19,9 +19,13 @@ library
       -- Exposed for the benefit of the plugin
       Data.Record.Anonymous.Internal
   other-modules:
-      Data.Record.Anonymous.Plugin.Constraints
+      Data.Record.Anonymous.Plugin.Constraints.HasField
+      Data.Record.Anonymous.Plugin.Constraints.RecordConstraints
+      Data.Record.Anonymous.Plugin.Constraints.RecordMetadata
       Data.Record.Anonymous.Plugin.GhcTcPluginAPI
       Data.Record.Anonymous.Plugin.NameResolution
+      Data.Record.Anonymous.Plugin.Parsing
+      Data.Record.Anonymous.Plugin.Record
       Data.Record.Anonymous.Plugin.Solver
   other-extensions:
   build-depends:
