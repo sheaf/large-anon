@@ -9,6 +9,7 @@
 {-# LANGUAGE TypeFamilies          #-}
 {-# LANGUAGE TypeOperators         #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 module Data.Record.Anonymous.Internal (
     -- * Types
@@ -20,8 +21,6 @@ module Data.Record.Anonymous.Internal (
     -- * Generics
   , RecordConstraints(..)
   , RecordMetadata(..)
-    -- ** Generic functions
-  , gshowRecord
     -- * Internal API
   , unsafeRecordHasField
   , unsafeDictRecord
@@ -33,6 +32,7 @@ import Data.Kind
 import Data.List (intercalate)
 import Data.Map (Map)
 import Data.Proxy
+import Data.SOP.BasicFunctors
 import GHC.Exts (Any)
 import GHC.OverloadedLabels
 import GHC.TypeLits
@@ -79,11 +79,13 @@ insert (Field l) a (MkR r) = MkR $ Map.insert (symbolVal l) (unsafeCoerce a) r
   Generics
 -------------------------------------------------------------------------------}
 
-class RecordConstraints (r :: [(Symbol, Type)]) (c :: Type -> Constraint) where
-  dictRecord :: Proxy c -> Rep (Dict c) (Record r)
-
 class RecordMetadata (r :: [(Symbol, Type)]) where
   recordMetadata :: Metadata (Record r)
+
+-- TODO: Make RecordMetadata a superclass consrtraint of RecordConstraints
+-- (We will need to update the core generation accordingly)
+class RecordConstraints r c where
+  dictRecord :: Proxy c -> Rep (Dict c) (Record r)
 
 instance RecordMetadata r => Generic (Record r) where
   type Constraints (Record r) = RecordConstraints r
@@ -103,15 +105,25 @@ instance RecordMetadata r => Generic (Record r) where
 
 {-------------------------------------------------------------------------------
   Instances
-
-  These depend on generics.
-
-  TODO: Should RecordMetadata be a superclass of RecordConstraints?
 -------------------------------------------------------------------------------}
 
-gshowRecord :: forall r.
-     (RecordMetadata r, RecordConstraints r Show)
-  => Record r -> String
+instance (RecordConstraints r Show, RecordMetadata r) => Show (Record r) where
+  show = gshowRecord
+
+instance (RecordConstraints r Eq, RecordMetadata r) => Eq (Record r) where
+  (==) = geqRecord
+
+instance ( RecordConstraints r Eq
+         , RecordConstraints r Ord
+         , RecordMetadata r
+         ) => Ord (Record r) where
+  compare = gcompareRecord
+
+{-------------------------------------------------------------------------------
+  Generic functions (to support the instances above)
+-------------------------------------------------------------------------------}
+
+gshowRecord :: forall r. (RecordConstraints r Show, RecordMetadata r) => Record r -> String
 gshowRecord =
       combine
     . Rep.collapse
@@ -130,6 +142,18 @@ gshowRecord =
         , intercalate ", " fs
         , "}"
         ]
+
+geqRecord :: (RecordConstraints r Eq, RecordMetadata r) => Record r -> Record r -> Bool
+geqRecord r r' =
+      and
+    . Rep.collapse
+    $ Rep.czipWith (Proxy @Eq) (mapIIK (==)) (from r) (from r')
+
+gcompareRecord :: (RecordConstraints r Ord, RecordMetadata r) => Record r -> Record r -> Ordering
+gcompareRecord r r' =
+      mconcat
+    . Rep.collapse
+    $ Rep.czipWith (Proxy @Ord) (mapIIK compare) (from r) (from r')
 
 {-------------------------------------------------------------------------------
   Internal API

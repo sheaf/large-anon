@@ -34,6 +34,7 @@ library
     , containers
     , ghc-tcplugin-api >= 0.6.1
     , record-hasfield
+    , sop-core
 
       -- TODO: We depend on this only for its generics interface
       -- Should we pull that out into its own package?

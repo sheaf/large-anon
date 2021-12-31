@@ -148,12 +148,9 @@ solveRecordConstraints rn@ResolvedNames{..}
         return (Nothing, [])
       Just fields -> do
         fields' <- for fields $ \field -> do
-          ev <- newWanted' l $
-                  mkClassPred
-                    -- TODO: should be recordConstraintsTypeConstraint
-                    -- (but then we need to parse more carefully)
-                    clsShow
-                    [knownFieldType field]
+          ev <- newWanted' l $ mkAppTy
+                                 recordConstraintsTypeConstraint
+                                 (knownFieldType field)
           return $ const ev <$> field
         ev <- evidenceRecordConstraints rn cr $ fmap getEvVar <$> fields'
         return (

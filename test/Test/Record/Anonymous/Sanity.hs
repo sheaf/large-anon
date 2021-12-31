@@ -1,11 +1,9 @@
+{-# LANGUAGE DataKinds        #-}
 {-# LANGUAGE OverloadedLabels #-}
-{-# LANGUAGE DataKinds #-}
 
 {-# OPTIONS_GHC -fplugin=Data.Record.Anonymous.Plugin #-}
 
 module Test.Record.Anonymous.Sanity (tests) where
-
-import Data.Record.Anonymous.Internal (gshowRecord) -- TODO: temporary
 
 import qualified Data.Record.Anonymous as R
 
@@ -16,6 +14,8 @@ tests :: TestTree
 tests = testGroup "Test.Record.Anonymous.Sanity" [
       testCase "HasField" test_HasField
     , testCase "Show"     test_Show
+    , testCase "Eq"       test_Eq
+    , testCase "Ord"      test_Ord
     ]
 
 {-------------------------------------------------------------------------------
@@ -26,7 +26,7 @@ tests = testGroup "Test.Record.Anonymous.Sanity" [
 
 -- | The equivalent non-anonymous record (for comparison)
 data Record = Record { x :: Bool, y :: Char, z :: () }
-  deriving (Show)
+  deriving (Show, Eq, Ord)
 
 simpleRecord :: R.Record '[ '("x", Bool), '("y", Char), '("z", ()) ]
 simpleRecord =
@@ -55,5 +55,16 @@ test_Show :: Assertion
 test_Show = do
     -- TODO: When we use a wildcard for the expected value here, the plugin
     -- panics.
-    assertEqual "" (show (Record True 'a' ())) $
-      gshowRecord simpleRecord
+    assertEqual "" (show (Record True 'a' ())) $ show simpleRecord
+
+test_Eq :: Assertion
+test_Eq = do
+    assertEqual "equal" True $
+      simpleRecord == simpleRecord
+    assertEqual "not equal" False $
+      simpleRecord == (R.set #x False simpleRecord)
+
+test_Ord :: Assertion
+test_Ord = do
+    assertEqual "" (compare (Record True 'a' ()) (Record False 'a' ())) $
+      compare simpleRecord (R.set #x False simpleRecord)

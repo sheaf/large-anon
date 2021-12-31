@@ -14,8 +14,6 @@ module Data.Record.Anonymous (
     -- * Generics
   , RecordConstraints(..)
   , RecordMetadata(..)
-    -- ** Generic functions
-  , gshowRecord
     -- ** Re-exports
   , HasField(..)
   ) where
