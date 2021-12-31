@@ -23,10 +23,9 @@ import Data.Record.Internal.Util (concatM)
 solve :: ResolvedNames -> TcPluginSolver
 solve rn given wanted = trace _debugOutput $ do
     (solved, new) <- fmap (bimap catMaybes concat . unzip) $ concatM [
-        forM parsedHasField $
-          uncurry (solveHasField rn)
-      , forM parsedRecordConstraints $
-          uncurry (solveRecordConstraints rn)
+        forM parsedHasField          $ uncurry (solveHasField          rn)
+      , forM parsedRecordConstraints $ uncurry (solveRecordConstraints rn)
+      , forM parsedRecordMetadata    $ uncurry (solveRecordMetadata    rn)
       ]
     return $ TcPluginOk solved new
   where
@@ -84,10 +83,7 @@ solveHasField rn orig (L l hf@CHasField{..}) =
       Just typ -> do
         eq <- newWanted' l $ mkPrimEqPredRole Nominal hasFieldTypeField typ
         ev <- evidenceHasField rn hf
-        return (
-            Just (ev, orig)
-          , [mkNonCanonical eq]
-          )
+        return (Just (ev, orig), [mkNonCanonical eq])
 
 {-------------------------------------------------------------------------------
   RecordConstraints
@@ -120,15 +116,33 @@ solveRecordConstraints rn@ResolvedNames{..}
                 rn
                 (zipWith ((,) . getEvVar) cs (Map.elems fields))
                 cr
-        return (
-            Just (ev, orig)
-          , map mkNonCanonical cs
-          )
+        return (Just (ev, orig), map mkNonCanonical cs)
   where
     getEvVar :: CtEvidence -> EvVar
     getEvVar ct = case ctev_dest ct of
       EvVarDest var -> var
       HoleDest  _   -> error "impossible (we don't ask for primitive equality)"
+
+{-------------------------------------------------------------------------------
+  RecordMetadata
+-------------------------------------------------------------------------------}
+
+solveRecordMetadata ::
+     ResolvedNames
+  -> Ct
+  -> GenLocated CtLoc CRecordMetadata
+  -> TcPluginM 'Solve (Maybe (EvTerm, Ct), [Ct])
+solveRecordMetadata rn@ResolvedNames{..}
+                       orig
+                       (L _l CRecordMetadata{..})
+                     = do
+    -- See 'solveRecordConstraints' for a discussion of 'allFieldsKnown'
+    case allFieldsKnown recordMetadataFields of
+      Nothing ->
+        return (Nothing, [])
+      Just _fields -> do
+        ev <- evidenceRecordMetadata rn recordMetadataFields
+        return (Just (ev, orig), [])
 
 {-------------------------------------------------------------------------------
   Auxiliary

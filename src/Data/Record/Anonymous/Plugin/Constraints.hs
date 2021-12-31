@@ -31,6 +31,7 @@ module Data.Record.Anonymous.Plugin.Constraints (
     -- * Evidence
   , evidenceHasField
   , evidenceRecordConstraints
+  , evidenceRecordMetadata
   ) where
 
 import Control.Monad
@@ -393,7 +394,7 @@ evidenceHasField ResolvedNames{..} CHasField{..} = do
             ]
         ]
 
--- | Construct evidence for 'ConstraintsClass'
+-- | Construct evidence for 'RecordConstraints'
 --
 -- The evidence for the fields must be specified in the right order
 -- (see 'Generic' instance for 'Record').
@@ -437,3 +438,10 @@ evidenceRecordConstraints ResolvedNames{..} cs CRecordConstraints{..} = do
     anyType :: Type
     anyType = mkTyConApp anyTyCon [liftedTypeKind]
 
+-- | Construct evidence for 'RecordMetadata'
+evidenceRecordMetadata ::
+     ResolvedNames
+  -> Fields
+  -> TcPluginM 'Solve EvTerm
+evidenceRecordMetadata ResolvedNames{..} fields =
+    undefined
