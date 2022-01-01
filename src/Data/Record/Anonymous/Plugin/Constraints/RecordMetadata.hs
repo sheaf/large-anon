@@ -11,10 +11,7 @@ module Data.Record.Anonymous.Plugin.Constraints.RecordMetadata (
   ) where
 
 import Data.Foldable (toList)
-import Data.Traversable (for)
 import Data.Void
-
-import qualified Data.Map as Map
 
 import Data.Record.Anonymous.Plugin.GhcTcPluginAPI
 import Data.Record.Anonymous.Plugin.NameResolution
@@ -77,11 +74,11 @@ parseRecordMetadata ResolvedNames{..} =
 evidenceRecordMetadata ::
      ResolvedNames
   -> CRecordMetadata
-  -> KnownRecord (KnownField EvVar)
+  -> KnownRecord EvVar
   -> TcPluginM 'Solve EvTerm
 evidenceRecordMetadata ResolvedNames{..}
                        CRecordMetadata{..}
-                       fields@KnownRecord{..}
+                       KnownRecord{..}
                      = do
     nameRecord <- mkStringExpr "Record"
     nameConstr <- mkStringExpr "Record"
@@ -93,11 +90,11 @@ evidenceRecordMetadata ResolvedNames{..}
               Type $ mkTyConApp tyConRecord [recordMetadataTypeRecord]
             , nameRecord
             , nameConstr
-            , mkUncheckedIntExpr (fromIntegral (Map.size knownFields))
+            , mkUncheckedIntExpr (fromIntegral (length knownFields))
             , mkCoreApps (Var idUnsafeFieldMetadata) [
                   Type recordMetadataTypeRecord
                 , mkListExpr fieldMetadataType $
-                    map mkFieldInfoAny (orderKnownFields fields)
+                    map (uncurry mkFieldInfoAny) knownFields
                 ]
             ]
         ]
@@ -105,10 +102,8 @@ evidenceRecordMetadata ResolvedNames{..}
     fieldMetadataType :: Type
     fieldMetadataType = mkTyConApp tyConFieldMetadata [anyType]
 
-    mkFieldInfoAny :: KnownField EvVar -> EvExpr
-    mkFieldInfoAny KnownField{ knownFieldName = fieldName
-                             , knownFieldInfo = dict
-                             } =
+    mkFieldInfoAny :: FastString -> KnownField EvVar -> EvExpr
+    mkFieldInfoAny fieldName KnownField{knownFieldInfo = dict} =
         mkCoreConApps dataConFieldMetadata [
             Type anyType
           , Type (mkStrLitTy fieldName)
@@ -143,14 +138,12 @@ solveRecordMetadata rn@ResolvedNames{..}
       Nothing ->
         return (Nothing, [])
       Just fields -> do
-        fields' <- for fields $ \field@KnownField{knownFieldName} -> do
-          ev <- newWanted' l $
-                  mkClassPred clsKnownSymbol [mkStrLitTy knownFieldName]
-          return $ const ev <$> field
-        ev <- evidenceRecordMetadata rn cm $ fmap getEvVar <$> fields'
+        fields' <- forKnownRecord fields $ \name _typ () -> do
+                     newWanted' l $ mkClassPred clsKnownSymbol [mkStrLitTy name]
+        ev <- evidenceRecordMetadata rn cm $ getEvVar <$> fields'
         return (
             Just (ev, orig)
-          , map (mkNonCanonical . knownFieldInfo) (toList fields')
+          , map mkNonCanonical (toList fields')
           )
   where
     getEvVar :: CtEvidence -> EvVar

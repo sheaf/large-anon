@@ -26,7 +26,6 @@ module Data.Record.Anonymous.Internal (
   , unsafeFieldMetadata
   ) where
 
-import Data.Coerce (coerce)
 import Data.Kind
 import Data.Map (Map)
 import Data.Proxy
@@ -89,12 +88,22 @@ instance RecordMetadata r => Generic (Record r) where
   dict       = dictRecord
   metadata _ = recordMetadata
 
+  -- Implementation note: the order of the fields in the vector must match
+  -- the order as specified by the user in the type.
+  --
+  -- TODO: Can we avoid the O(n log n) cost?
+
   from :: Record r -> Rep I (Record r)
   from (MkR r) =
-      Rep.unsafeFromListAny (aux $ Map.elems r)
+      Rep.unsafeFromListAny $ map aux names
     where
-      aux :: [Any] -> [I Any]
-      aux = coerce
+      names :: [String]
+      names = Rep.collapse $ recordFieldNames $ metadata (Proxy @(Record r))
+
+      aux :: String -> I Any
+      aux nm = case Map.lookup nm r of
+                 Just x  -> I x
+                 Nothing -> error "impossible: non-existent field"
 
   to :: Rep I (Record r) -> Record r
   to =

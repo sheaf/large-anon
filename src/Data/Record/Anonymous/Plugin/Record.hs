@@ -1,9 +1,11 @@
-{-# LANGUAGE DeriveFoldable    #-}
-{-# LANGUAGE DeriveFunctor     #-}
-{-# LANGUAGE DeriveTraversable #-}
-{-# LANGUAGE LambdaCase        #-}
-{-# LANGUAGE NamedFieldPuns    #-}
-{-# LANGUAGE RecordWildCards   #-}
+{-# LANGUAGE DeriveFoldable      #-}
+{-# LANGUAGE DeriveFunctor       #-}
+{-# LANGUAGE DeriveTraversable   #-}
+{-# LANGUAGE LambdaCase          #-}
+{-# LANGUAGE NamedFieldPuns      #-}
+{-# LANGUAGE RecordWildCards     #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TupleSections       #-}
 
 -- | Description of a record as it is known at compile time
 module Data.Record.Anonymous.Plugin.Record (
@@ -18,8 +20,7 @@ module Data.Record.Anonymous.Plugin.Record (
   , KnownField(..)
     -- ** Construction
   , allFieldsKnown
-    -- ** Query
-  , orderKnownFields
+  , forKnownRecord
     -- * Parsing
   , parseRecord
   , parseFields
@@ -28,9 +29,7 @@ module Data.Record.Anonymous.Plugin.Record (
 
 import Control.Monad
 import Data.Foldable (asum)
-import Data.Map
-
-import qualified Data.Map as Map
+import Data.Traversable (for)
 
 import Data.Record.Anonymous.Plugin.GhcTcPluginAPI
 import Data.Record.Anonymous.Plugin.NameResolution
@@ -66,61 +65,67 @@ findField nm = go
 
 {-------------------------------------------------------------------------------
   Records of statically known shape
-
-  TODO: Move this to a module of its own (along with the basic definitions),
-  and split the different kinds of constraints to modules of their own.
 -------------------------------------------------------------------------------}
 
 data KnownRecord a = KnownRecord {
-      knownFields :: Map FastString a
+      -- | Known fields, in order
+      --
+      -- The order of the known fields matches the order as specified in the
+      -- (user-defined) type. This is important, because the @large-anon@
+      -- library considers records with re-ordered fields to not be equal
+      -- (merely isomorphic, see 'castRecord').
+      knownFields :: [(FastString, KnownField a)]
     }
-  deriving (Functor, Foldable, Traversable)
+  deriving (Functor, Foldable)
 
 data KnownField a = KnownField {
-      knownFieldName :: FastString -- repeated here for convenience
-    , knownFieldType :: Type
+      knownFieldType :: Type
     , knownFieldInfo :: a
     }
-  deriving (Functor)
+  deriving (Functor, Foldable)
+
+forKnownRecord :: forall m a b.
+     Applicative m
+  => KnownRecord a
+  -> (FastString -> Type -> a -> m b)
+  -> m (KnownRecord b)
+forKnownRecord (KnownRecord fields) f = fmap KnownRecord $
+    for fields $ \(nm, fld) ->
+      (nm,) <$> aux nm fld
+  where
+    aux :: FastString -> KnownField a -> m (KnownField b)
+    aux nm (KnownField typ a) = KnownField typ <$> f nm typ a
 
 -- | Return map from field name to type, /if/ all fields are statically known
 --
 -- TODO: For our current 'Fields' definition, this will /always/ be the case,
 -- but if we extend the parser to deal with field name variables or list
 -- variables, this will no longer be the case.
-allFieldsKnown :: Fields -> Maybe (KnownRecord (KnownField ()))
-allFieldsKnown = go Map.empty
+allFieldsKnown :: Fields -> Maybe (KnownRecord ())
+allFieldsKnown = go []
   where
-    go :: Map FastString (KnownField ()) -> Fields -> Maybe (KnownRecord (KnownField ()))
+    go :: [(FastString, KnownField ())]
+       -> Fields
+       -> Maybe (KnownRecord ())
     go acc = \case
         FieldsNil ->
           Just KnownRecord {
-              knownFields = acc
+              knownFields = reverse acc
             }
         FieldsCons (Field label typ) fs ->
           case label of
             FieldKnown nm ->
-              go (Map.insert nm (knownField nm typ) acc) fs
+              go ((nm, knownField typ) : acc) fs
             FieldVar _ ->
               Nothing
         FieldsVar _ ->
           Nothing
 
-    knownField :: FastString -> Type -> KnownField ()
-    knownField nm typ = KnownField {
-          knownFieldName = nm
-        , knownFieldType = typ
+    knownField :: Type -> KnownField ()
+    knownField typ = KnownField {
+          knownFieldType = typ
         , knownFieldInfo = ()
         }
-
--- | List all known-fields in order
---
--- The order here is determined by the alphabetical order as returned by
--- 'Map.elems' and friends. It is critical that this matches the order of the
--- fields in the vector assumed by the 'from' and 'to' methods of the
--- 'Generic' class instance.
-orderKnownFields :: KnownRecord a -> [a]
-orderKnownFields KnownRecord{knownFields} = Map.elems knownFields
 
 {-------------------------------------------------------------------------------
   Outputable

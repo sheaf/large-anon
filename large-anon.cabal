@@ -66,6 +66,8 @@ test-suite test-large-anon
       TestLargeAnon.hs
   other-modules:
       Test.Record.Anonymous.Sanity
+      Test.Record.Anonymous.Sanity.Named.Record1
+      Test.Record.Anonymous.Sanity.Named.Record2
   build-depends:
       base
     , aeson

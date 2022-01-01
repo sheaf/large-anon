@@ -10,7 +10,6 @@ module Data.Record.Anonymous.Plugin.Constraints.RecordConstraints (
   ) where
 
 import Data.Foldable (toList)
-import Data.Traversable (for)
 import Data.Void
 
 import Data.Record.Anonymous.Plugin.GhcTcPluginAPI
@@ -82,7 +81,7 @@ evidenceRecordConstraints ::
      ResolvedNames
   -> CRecordConstraints
   -> EvVar -- Evidence of RecordMetadata
-  -> KnownRecord (KnownField EvVar)
+  -> KnownRecord EvVar
   -> TcPluginM 'Solve EvTerm
 evidenceRecordConstraints ResolvedNames{..}
                           CRecordConstraints{..}
@@ -98,7 +97,7 @@ evidenceRecordConstraints ResolvedNames{..}
               Type recordConstraintsTypeRecord
             , Type recordConstraintsTypeConstraint
             , mkListExpr dictType $
-                map mkDictAny (orderKnownFields fields)
+                map (mkDictAny . snd) (knownFields fields)
             ]
         ]
   where
@@ -158,19 +157,13 @@ solveRecordConstraints rn@ResolvedNames{..}
                      mkClassPred
                        clsRecordMetadata
                        [recordConstraintsTypeRecord]
-        fields' <- for fields $ \field -> do
-                     ev <- newWanted' l $
-                             mkAppTy
-                               recordConstraintsTypeConstraint
-                               (knownFieldType field)
-                     return $ const ev <$> field
+        fields' <- forKnownRecord fields $ \_name typ () -> do
+                     newWanted' l $ mkAppTy recordConstraintsTypeConstraint typ
         ev      <- evidenceRecordConstraints rn cr (getEvVar evMeta) $
-                     fmap getEvVar <$> fields'
+                     getEvVar <$> fields'
         return (
             Just (ev, orig)
-          , map mkNonCanonical $
-                evMeta
-              : map knownFieldInfo (toList fields')
+          , map mkNonCanonical (evMeta : toList fields')
           )
   where
     getEvVar :: CtEvidence -> EvVar
