@@ -8,13 +8,12 @@
 {-# LANGUAGE TypeApplications      #-}
 {-# LANGUAGE TypeFamilies          #-}
 {-# LANGUAGE TypeOperators         #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE FlexibleContexts      #-}
 
 module Data.Record.Anonymous.Internal (
     -- * Types
-    Record(..)
-  , Field(..)
+    Record -- Opaque
+  , Field  -- Opaque
     -- * User-visible API
   , empty
   , insert
@@ -29,7 +28,6 @@ module Data.Record.Anonymous.Internal (
 
 import Data.Coerce (coerce)
 import Data.Kind
-import Data.List (intercalate)
 import Data.Map (Map)
 import Data.Proxy
 import Data.SOP.BasicFunctors
@@ -42,7 +40,6 @@ import qualified Data.Map as Map
 
 import Data.Record.Generic
 
-import qualified Data.Record.Generic.Rep          as Rep
 import qualified Data.Record.Generic.Rep.Internal as Rep
 
 {-------------------------------------------------------------------------------
@@ -102,58 +99,6 @@ instance RecordMetadata r => Generic (Record r) where
 
   to :: Rep I (Record r) -> Record r
   to = error "to: not yet defined (we need to reconstruct the field names)"
-
-{-------------------------------------------------------------------------------
-  Instances
--------------------------------------------------------------------------------}
-
-instance (RecordConstraints r Show, RecordMetadata r) => Show (Record r) where
-  show = gshowRecord
-
-instance (RecordConstraints r Eq, RecordMetadata r) => Eq (Record r) where
-  (==) = geqRecord
-
-instance ( RecordConstraints r Eq
-         , RecordConstraints r Ord
-         , RecordMetadata r
-         ) => Ord (Record r) where
-  compare = gcompareRecord
-
-{-------------------------------------------------------------------------------
-  Generic functions (to support the instances above)
--------------------------------------------------------------------------------}
-
-gshowRecord :: forall r. (RecordConstraints r Show, RecordMetadata r) => Record r -> String
-gshowRecord =
-      combine
-    . Rep.collapse
-    . Rep.czipWith (Proxy @Show) aux names
-    . from
-  where
-    names :: Rep (K String) (Record r)
-    names = recordFieldNames $ metadata (Proxy @(Record r))
-
-    aux :: Show x => K String x -> I x -> K String x
-    aux (K name) (I x) = K (name ++ " = " ++ show x)
-
-    combine :: [String] -> String
-    combine fs = concat [
-          "Record {"
-        , intercalate ", " fs
-        , "}"
-        ]
-
-geqRecord :: (RecordConstraints r Eq, RecordMetadata r) => Record r -> Record r -> Bool
-geqRecord r r' =
-      and
-    . Rep.collapse
-    $ Rep.czipWith (Proxy @Eq) (mapIIK (==)) (from r) (from r')
-
-gcompareRecord :: (RecordConstraints r Ord, RecordMetadata r) => Record r -> Record r -> Ordering
-gcompareRecord r r' =
-      mconcat
-    . Rep.collapse
-    $ Rep.czipWith (Proxy @Ord) (mapIIK compare) (from r) (from r')
 
 {-------------------------------------------------------------------------------
   Internal API
