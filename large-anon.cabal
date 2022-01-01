@@ -14,6 +14,7 @@ extra-source-files: CHANGELOG.md
 library
   exposed-modules:
       Data.Record.Anonymous
+      Data.Record.Anonymous.JSON
       Data.Record.Anonymous.Plugin
 
       -- Exposed for the benefit of the plugin
@@ -35,6 +36,10 @@ library
     , ghc-tcplugin-api >= 0.6.1
     , record-hasfield
     , sop-core
+    , text
+
+      -- TODO: compat with aeson > 2
+    , aeson < 2
 
       -- TODO: We depend on this only for its generics interface
       -- Should we pull that out into its own package?
@@ -63,6 +68,7 @@ test-suite test-large-anon
       Test.Record.Anonymous.Sanity
   build-depends:
       base
+    , aeson
     , large-anon
     , tasty
     , tasty-hunit

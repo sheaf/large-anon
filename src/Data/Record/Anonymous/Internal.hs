@@ -90,13 +90,21 @@ instance RecordMetadata r => Generic (Record r) where
   metadata _ = recordMetadata
 
   from :: Record r -> Rep I (Record r)
-  from (MkR r) = Rep.unsafeFromListAny (aux $ Map.elems r)
+  from (MkR r) =
+      Rep.unsafeFromListAny (aux $ Map.elems r)
     where
       aux :: [Any] -> [I Any]
       aux = coerce
 
   to :: Rep I (Record r) -> Record r
-  to = error "to: not yet defined (we need to reconstruct the field names)"
+  to =
+      MkR . Map.fromList . zipWith aux names . Rep.toListAny
+    where
+      names :: [String]
+      names = Rep.collapse $ recordFieldNames $ metadata (Proxy @(Record r))
+
+      aux :: String -> I Any -> (String, Any)
+      aux name (I x) = (name, x)
 
 {-------------------------------------------------------------------------------
   Internal API

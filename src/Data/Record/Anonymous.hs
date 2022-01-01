@@ -20,7 +20,8 @@ module Data.Record.Anonymous (
   , RecordConstraints(..)
   , RecordMetadata(..)
     -- ** Re-exports
-  , HasField(..)
+  , module GHC.Records.Compat
+  , module Data.Record.Generic
   ) where
 
 import Data.List (intercalate)
@@ -32,6 +33,7 @@ import GHC.Records.Compat
 import qualified Data.Record.Generic.Rep as Rep
 
 import Data.Record.Anonymous.Internal
+import Data.Record.Anonymous.JSON () -- ToJSON/FromJSON instance
 
 {-------------------------------------------------------------------------------
   Convenience functions
@@ -136,3 +138,4 @@ describeRecord _ =
         , intercalate ", " fs
         , "}"
         ]
+
