@@ -14,6 +14,7 @@ module Data.Record.Anonymous.Plugin.Parsing (
   , withOrig
     -- * Parsers for specific (but not @large-anon@ specific) constructs
   , parseConstraint
+  , parseConstraint'
   , parseCons
   , parseNil
   , parsePair
@@ -22,6 +23,7 @@ module Data.Record.Anonymous.Plugin.Parsing (
 import Control.Monad
 import Data.Bifunctor
 import Data.Void
+import GHC.Stack
 
 import Data.Record.Anonymous.Plugin.GhcTcPluginAPI
 
@@ -77,14 +79,15 @@ withOrig f x = fmap (x, ) $ f x
 -- TODO: If we add some parsing infra to ghc-tcplugin-api, maybe a (form of)
 -- this function could live there too.
 parseConstraint ::
-     Class                -- ^ Class we're matching against
-  -> ([Type] -> Maybe a)  -- ^ Parser for the class arguments
-  -> Ct                   -- ^ Constraint to parse
-  -> ParseResult e (GenLocated CtLoc a)
-parseConstraint cls f ct = fmap (L $ ctLoc ct) $
+     HasCallStack
+  => (Class -> [Type] -> Maybe a) -- ^ Do we want to try and match against this?
+  -> (a -> Maybe b)               -- ^ Parser for the class arguments
+  -> Ct                           -- ^ Constraint to parse
+  -> ParseResult e (GenLocated CtLoc b)
+parseConstraint p f ct = fmap (L $ ctLoc ct) $
     case classifyPredType (ctPred ct) of
-      ClassPred cls' args | cls == cls' ->
-        case f args of
+      ClassPred cls args | Just a <- p cls args ->
+        case f a of
           Just parsed ->
             ParseOk parsed
           Nothing ->
@@ -93,9 +96,23 @@ parseConstraint cls f ct = fmap (L $ ctLoc ct) $
               , showSDocUnsafe (ppr cls)
               , " constraint with arguments:\n"
               , unlines (map (showSDocUnsafe . ppr) args)
+              , "\nat\n"
+              , prettyCallStack callStack
               ]
       _otherwise ->
         ParseNoMatch
+
+-- | Specialization of 'parseConstriant', just checking the class name
+parseConstraint' ::
+     HasCallStack
+  => Class                        -- ^ Predicate we want to match against
+  -> ([Type] -> Maybe a)          -- ^ Parser for the class arguments
+  -> Ct                           -- ^ Constraint to parse
+  -> ParseResult e (GenLocated CtLoc a)
+parseConstraint' cls = parseConstraint p
+  where
+    p :: Class -> [Type] -> Maybe [Type]
+    p cls' args = if cls == cls' then Just args else Nothing
 
 -- | Parse @x ': xs == (':) x xs == ((':) x) xs@
 parseCons :: Type -> Maybe (Type, Type)

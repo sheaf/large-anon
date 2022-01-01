@@ -11,6 +11,7 @@ module Data.Record.Anonymous.Plugin.Constraints.HasField (
 
 import Control.Monad
 import Data.Void
+import GHC.Stack
 
 import Data.Record.Anonymous.Plugin.GhcTcPluginAPI
 import Data.Record.Anonymous.Plugin.NameResolution
@@ -24,11 +25,7 @@ import Data.Record.Anonymous.Plugin.Record
 -- | Parsed form of a @HasField x r a@ constraint
 data CHasField = CHasField {
       -- | Label we're looking for (@x@)
-      --
-      -- This is always a monomorphic, statically known string; if we don't
-      -- know what label we're looking for, we'll definitely not be able
-      -- to resolve the constraint.
-      hasFieldLabel :: FastString
+      hasFieldLabel :: FieldLabel
 
       -- | Fields of the record
       --
@@ -63,32 +60,38 @@ instance Outputable CHasField where
 -------------------------------------------------------------------------------}
 
 parseHasField ::
-     ResolvedNames
+     HasCallStack
+  => ResolvedNames
   -> Ct
   -> ParseResult Void (GenLocated CtLoc CHasField)
 parseHasField rn@ResolvedNames{..} =
-    parseConstraint clsHasField $ \case
-      args@[k, x, r, a] -> do
-        -- Check the kind
+    parseConstraint isRelevant $ \(args, x, tyFields, a) -> do
+      label  <- parseFieldLabel x
+      fields <- parseFields tyFields
+
+      return $ CHasField {
+          hasFieldLabel      = label
+        , hasFieldRecord     = fields
+        , hasFieldTypeRaw    = args
+        , hasFieldTypeRecord = tyFields
+        , hasFieldTypeField  = a
+        }
+  where
+    -- The constraint is relevant if
+    --
+    -- o It is of the form @HasField k x r a@
+    -- o @k == Symbol@
+    -- o @r == Record r'@
+    --
+    -- When it is, return @(x, r', a)@ as well as the raw arguments [k, x, r, a]
+    isRelevant :: Class -> [Type] -> Maybe ([Type], Type, Type, Type)
+    isRelevant cls args@[k, x, r, a] = do
+        guard $ cls == clsHasField
         tcSymbol <- tyConAppTyCon_maybe k
         guard $ tcSymbol == typeSymbolKindCon
-
-        -- We insist the name we're looking for is statically known
-        x' <- isStrLitTy x
-
-        -- Check that it's of the form @Record r@
         tyFields <- parseRecord rn r
-        fields   <- parseFields tyFields
-
-        return $ CHasField {
-            hasFieldLabel      = x'
-          , hasFieldRecord     = fields
-          , hasFieldTypeRaw    = args
-          , hasFieldTypeRecord = tyFields
-          , hasFieldTypeField  = a
-          }
-      _invalidNumArgs ->
-        Nothing
+        return (args, x, tyFields, a)
+    isRelevant _ _ = Nothing
 
 {-------------------------------------------------------------------------------
   Evidence
@@ -97,9 +100,10 @@ parseHasField rn@ResolvedNames{..} =
 evidenceHasField ::
      ResolvedNames
   -> CHasField
+  -> FastString -- ^ Field name (we cannot produce evidence for unknown fields)
   -> TcPluginM 'Solve EvTerm
-evidenceHasField ResolvedNames{..} CHasField{..} = do
-    str <- mkStringExprFS hasFieldLabel
+evidenceHasField ResolvedNames{..} CHasField{..} name = do
+    str <- mkStringExprFS name
     return $
       evDataConApp
         (classDataCon clsHasField)
@@ -120,13 +124,15 @@ solveHasField ::
   -> Ct
   -> GenLocated CtLoc CHasField
   -> TcPluginM 'Solve (Maybe (EvTerm, Ct), [Ct])
-solveHasField rn orig (L l hf@CHasField{..}) =
-    case findField hasFieldLabel hasFieldRecord of
+solveHasField _ _ (L _ CHasField{hasFieldLabel = FieldVar _}) =
+    return (Nothing, [])
+solveHasField rn orig (L l hf@CHasField{hasFieldLabel = FieldKnown name, ..}) =
+    case findField name hasFieldRecord of
       Nothing ->
         -- TODO: If the record is fully known, we should issue a custom type
         -- error here rather than leaving the constraint unsolved
         return (Nothing, [])
       Just typ -> do
         eq <- newWanted' l $ mkPrimEqPredRole Nominal hasFieldTypeField typ
-        ev <- evidenceHasField rn hf
+        ev <- evidenceHasField rn hf name
         return (Just (ev, orig), [mkNonCanonical eq])

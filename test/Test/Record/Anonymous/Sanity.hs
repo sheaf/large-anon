@@ -3,6 +3,7 @@
 {-# LANGUAGE TypeApplications #-}
 
 {-# OPTIONS_GHC -fplugin=Data.Record.Anonymous.Plugin #-}
+{-# OPTIONS_GHC -fno-show-valid-hole-fits #-}
 
 module Test.Record.Anonymous.Sanity (tests) where
 
@@ -55,8 +56,6 @@ test_HasField = do
 
 test_Show :: Assertion
 test_Show = do
-    -- TODO: When we use a wildcard for the expected value here, the plugin
-    -- panics.
     assertEqual "" (show (Record True 'a' ())) $ show simpleRecord
 
 test_Eq :: Assertion

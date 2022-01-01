@@ -10,6 +10,7 @@ module Data.Record.Anonymous.Plugin.Record (
     -- * General case
     Fields(..)
   , Field(..)
+  , FieldLabel(..)
     -- ** Query
   , findField
     -- * Records of statically known shape
@@ -22,6 +23,7 @@ module Data.Record.Anonymous.Plugin.Record (
     -- * Parsing
   , parseRecord
   , parseFields
+  , parseFieldLabel
   ) where
 
 import Control.Monad
@@ -42,20 +44,25 @@ import Data.Record.Anonymous.Plugin.Parsing
 data Fields =
     FieldsCons Field Fields
   | FieldsNil
+  | FieldsVar TyVar
 
--- TODO: Will need extension for the polymorphic case
-data Field =
-    -- | Name and type of a known (non-polymorphic) field
-    FieldKnown FastString Type
+data Field = Field FieldLabel Type
 
+data FieldLabel =
+    FieldKnown FastString
+  | FieldVar   TyVar
+  deriving (Eq)
+
+-- | Find field type by name
 findField :: FastString -> Fields -> Maybe Type
 findField nm = go
   where
     go :: Fields -> Maybe Type
-    go (FieldsCons (FieldKnown nm' typ) fs)
-      | nm == nm' = Just typ
-      | otherwise = go fs
-    go FieldsNil = Nothing
+    go (FieldsCons (Field label typ) fs)
+      | label == FieldKnown nm = Just typ
+      | otherwise              = go fs
+    go FieldsNil     = Nothing
+    go (FieldsVar _) = Nothing
 
 {-------------------------------------------------------------------------------
   Records of statically known shape
@@ -90,10 +97,14 @@ allFieldsKnown = go Map.empty
           Just KnownRecord {
               knownFields = acc
             }
-        FieldsCons f fs ->
-          case f of
-            FieldKnown nm typ ->
+        FieldsCons (Field label typ) fs ->
+          case label of
+            FieldKnown nm ->
               go (Map.insert nm (knownField nm typ) acc) fs
+            FieldVar _ ->
+              Nothing
+        FieldsVar _ ->
+          Nothing
 
     knownField :: FastString -> Type -> KnownField ()
     knownField nm typ = KnownField {
@@ -120,13 +131,18 @@ instance Outputable Fields where
           text "FieldsCons"
       <+> ppr f
       <+> ppr fs
-  ppr FieldsNil = text "FieldsNil"
+  ppr FieldsNil       = text "FieldsNil"
+  ppr (FieldsVar var) = parens $ text "FieldsVar" <+> ppr var
 
 instance Outputable Field where
-  ppr (FieldKnown nm typ) = parens $
-          text "FieldKnown"
-      <+> ppr nm
+  ppr (Field label typ) = parens $
+          text "Field"
+      <+> ppr label
       <+> ppr typ
+
+instance Outputable FieldLabel where
+  ppr (FieldKnown nm)  = parens $ text "FieldKnown" <+> ppr nm
+  ppr (FieldVar   var) = parens $ text "FieldVar"   <+> ppr var
 
 {-------------------------------------------------------------------------------
   Parser
@@ -134,13 +150,14 @@ instance Outputable Field where
 
 -- | Parse @Record r@
 --
--- Returns the  argument @r@
+-- Returns the argument @r@
 parseRecord :: ResolvedNames -> Type -> Maybe Type
-parseRecord ResolvedNames{..} r = do
-    (tyRecord, tyFields) <- splitAppTy_maybe r
-    tcRecord <- tyConAppTyCon_maybe tyRecord
-    guard $ tcRecord == tyConRecord
-    return tyFields
+parseRecord ResolvedNames{..} r = asum [
+      do (tyRecord, tyFields) <- splitAppTy_maybe r
+         tcRecord <- tyConAppTyCon_maybe tyRecord
+         guard $ tcRecord == tyConRecord
+         return tyFields
+    ]
 
 parseFields :: Type -> Maybe Fields
 parseFields fields = asum [
@@ -149,12 +166,17 @@ parseFields fields = asum [
          (FieldsCons f') <$> parseFields fs
     , do parseNil fields
          return FieldsNil
+    , do FieldsVar <$> getTyVar_maybe fields
     ]
 
 parseField :: Type -> Maybe Field
-parseField field = asum [
-      do (nm, typ) <- parsePair field
-         nm' <- isStrLitTy nm
-         return $ FieldKnown nm' typ
-    ]
+parseField field = do
+    (label, typ) <- parsePair field
+    label' <- parseFieldLabel label
+    return $ Field label' typ
 
+parseFieldLabel :: Type -> Maybe FieldLabel
+parseFieldLabel label = asum [
+      FieldKnown <$> isStrLitTy     label
+    , FieldVar   <$> getTyVar_maybe label
+    ]

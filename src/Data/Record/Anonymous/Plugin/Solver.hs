@@ -22,13 +22,15 @@ import Data.Record.Anonymous.Plugin.Parsing
 -------------------------------------------------------------------------------}
 
 solve :: ResolvedNames -> TcPluginSolver
-solve rn given wanted = {- trace _debugOutput $ -} do
-    (solved, new) <- fmap (bimap catMaybes concat . unzip) $ concatM [
-        forM parsedHasField          $ uncurry (solveHasField          rn)
-      , forM parsedRecordConstraints $ uncurry (solveRecordConstraints rn)
-      , forM parsedRecordMetadata    $ uncurry (solveRecordMetadata    rn)
-      ]
-    return $ TcPluginOk solved new
+solve rn given wanted =
+--  trace _debugInput $
+--  trace _debugParsed $
+    do (solved, new) <- fmap (bimap catMaybes concat . unzip) $ concatM [
+           forM parsedHasField          $ uncurry (solveHasField          rn)
+         , forM parsedRecordConstraints $ uncurry (solveRecordConstraints rn)
+         , forM parsedRecordMetadata    $ uncurry (solveRecordMetadata    rn)
+         ]
+       return $ TcPluginOk solved new
   where
     parsedHasField          :: [(Ct, GenLocated CtLoc CHasField)]
     parsedRecordConstraints :: [(Ct, GenLocated CtLoc CRecordConstraints)]
@@ -41,9 +43,9 @@ solve rn given wanted = {- trace _debugOutput $ -} do
     parsedRecordMetadata =
         parseAll' (withOrig (parseRecordMetadata rn)) wanted
 
-    _debugOutput :: String
-    _debugOutput = unlines [
-          "*** solve"
+    _debugInput :: String
+    _debugInput = unlines [
+          "*** input"
         , concat [
               "given:"
             , showSDocUnsafe (ppr given)
@@ -52,6 +54,11 @@ solve rn given wanted = {- trace _debugOutput $ -} do
               "wanted: "
             , showSDocUnsafe (ppr wanted)
             ]
+        ]
+
+    _debugParsed :: String
+    _debugParsed = unlines [
+          "*** parsed"
         , concat [
               "parsedHasField: "
             , showSDocUnsafe (ppr parsedHasField)
