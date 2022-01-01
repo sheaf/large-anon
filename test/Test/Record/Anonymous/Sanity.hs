@@ -1,5 +1,6 @@
 {-# LANGUAGE DataKinds        #-}
 {-# LANGUAGE OverloadedLabels #-}
+{-# LANGUAGE TypeApplications #-}
 
 {-# OPTIONS_GHC -fplugin=Data.Record.Anonymous.Plugin #-}
 
@@ -12,10 +13,11 @@ import Test.Tasty.HUnit
 
 tests :: TestTree
 tests = testGroup "Test.Record.Anonymous.Sanity" [
-      testCase "HasField" test_HasField
-    , testCase "Show"     test_Show
-    , testCase "Eq"       test_Eq
-    , testCase "Ord"      test_Ord
+      testCase "HasField"       test_HasField
+    , testCase "Show"           test_Show
+    , testCase "Eq"             test_Eq
+    , testCase "Ord"            test_Ord
+    , testCase "describeRecord" test_describeRecord
     ]
 
 {-------------------------------------------------------------------------------
@@ -68,3 +70,16 @@ test_Ord :: Assertion
 test_Ord = do
     assertEqual "" (compare (Record True 'a' ()) (Record False 'a' ())) $
       compare simpleRecord (R.set #x False simpleRecord)
+
+-- Test 'describeRecord'
+--
+-- The primary motivation for this test is actually not the function itself,
+-- but to verify that constraint resolution is working ok. Specifically,
+-- that the implicit kind argument to 'Typeable' is handled by ghc and does not
+-- need to be taken into account by the @large-anon@ plugin.
+test_describeRecord :: Assertion
+test_describeRecord = do
+    assertEqual "" expected $ R.describeRecord simpleRecord
+  where
+    expected :: String
+    expected = "Record {x :: Bool, y :: Char, z :: ()}"
