@@ -75,18 +75,18 @@ instance ( RecordConstraints r Eq
   Generic functions (to support the instances above)
 -------------------------------------------------------------------------------}
 
-gshowRecord :: forall r. (RecordConstraints r Show, RecordMetadata r) => Record r -> String
+gshowRecord :: forall r. RecordConstraints r Show => Record r -> String
 gshowRecord =
       combine
     . Rep.collapse
-    . Rep.czipWith (Proxy @Show) aux names
+    . Rep.czipWith (Proxy @Show) (mapKIK aux) names
     . from
   where
     names :: Rep (K String) (Record r)
     names = recordFieldNames $ metadata (Proxy @(Record r))
 
-    aux :: Show x => K String x -> I x -> K String x
-    aux (K name) (I x) = K (name ++ " = " ++ show x)
+    aux :: Show x => String -> x -> String
+    aux name x = name ++ " = " ++ show x
 
     combine :: [String] -> String
     combine fs = concat [
@@ -95,13 +95,13 @@ gshowRecord =
         , "}"
         ]
 
-geqRecord :: (RecordConstraints r Eq, RecordMetadata r) => Record r -> Record r -> Bool
+geqRecord :: RecordConstraints r Eq => Record r -> Record r -> Bool
 geqRecord r r' =
       and
     . Rep.collapse
     $ Rep.czipWith (Proxy @Eq) (mapIIK (==)) (from r) (from r')
 
-gcompareRecord :: (RecordConstraints r Ord, RecordMetadata r) => Record r -> Record r -> Ordering
+gcompareRecord :: RecordConstraints r Ord => Record r -> Record r -> Ordering
 gcompareRecord r r' =
       mconcat
     . Rep.collapse

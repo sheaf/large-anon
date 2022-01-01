@@ -48,6 +48,7 @@ library
       Haskell2010
   ghc-options:
       -Wall
+      -Wredundant-constraints
 
 test-suite test-large-anon
   default-language:

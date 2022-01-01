@@ -81,14 +81,20 @@ parseRecordConstraints ResolvedNames{..} =
 evidenceRecordConstraints ::
      ResolvedNames
   -> CRecordConstraints
+  -> EvVar -- Evidence of RecordMetadata
   -> KnownRecord (KnownField EvVar)
   -> TcPluginM 'Solve EvTerm
-evidenceRecordConstraints ResolvedNames{..} CRecordConstraints{..} fields = do
+evidenceRecordConstraints ResolvedNames{..}
+                          CRecordConstraints{..}
+                          evMeta
+                          fields
+                        = do
     return $
       evDataConApp
         (classDataCon clsRecordConstraints)
         recordConstraintsTypeRaw
-        [ mkCoreApps (Var idUnsafeDictRecord) [
+        [ Var evMeta
+        , mkCoreApps (Var idUnsafeDictRecord) [
               Type recordConstraintsTypeRecord
             , Type recordConstraintsTypeConstraint
             , mkListExpr dictType $
@@ -147,15 +153,24 @@ solveRecordConstraints rn@ResolvedNames{..}
       Nothing ->
         return (Nothing, [])
       Just fields -> do
+        -- RecordConstraints has a superclass constraint on RecordMetadata
+        evMeta  <- newWanted' l $
+                     mkClassPred
+                       clsRecordMetadata
+                       [recordConstraintsTypeRecord]
         fields' <- for fields $ \field -> do
-          ev <- newWanted' l $ mkAppTy
-                                 recordConstraintsTypeConstraint
-                                 (knownFieldType field)
-          return $ const ev <$> field
-        ev <- evidenceRecordConstraints rn cr $ fmap getEvVar <$> fields'
+                     ev <- newWanted' l $
+                             mkAppTy
+                               recordConstraintsTypeConstraint
+                               (knownFieldType field)
+                     return $ const ev <$> field
+        ev      <- evidenceRecordConstraints rn cr (getEvVar evMeta) $
+                     fmap getEvVar <$> fields'
         return (
             Just (ev, orig)
-          , map (mkNonCanonical . knownFieldInfo) (toList fields')
+          , map mkNonCanonical $
+                evMeta
+              : map knownFieldInfo (toList fields')
           )
   where
     getEvVar :: CtEvidence -> EvVar

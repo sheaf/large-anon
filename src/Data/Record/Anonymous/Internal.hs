@@ -79,9 +79,7 @@ insert (Field l) a (MkR r) = MkR $ Map.insert (symbolVal l) (unsafeCoerce a) r
 class RecordMetadata (r :: [(Symbol, Type)]) where
   recordMetadata :: Metadata (Record r)
 
--- TODO: Make RecordMetadata a superclass consrtraint of RecordConstraints
--- (We will need to update the core generation accordingly)
-class RecordConstraints r c where
+class RecordMetadata r => RecordConstraints r c where
   dictRecord :: Proxy c -> Rep (Dict c) (Record r)
 
 instance RecordMetadata r => Generic (Record r) where
